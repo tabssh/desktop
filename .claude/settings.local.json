@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(chmod:*)",
+      "Bash(docker build:*)",
+      "Bash(docker run:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo run:*)",
+      "Bash(tabssh-builder cargo run)",
+      "Bash(tabssh-builder cargo build:*)",
+      "Bash(tabssh-builder:*)",
+      "Bash(ss -tlnp:*)",
+      "Bash(netstat:*)",
+      "Bash(systemctl is-active:*)",
+      "Bash(service ssh status:*)",
+      "Bash(cat:*)",
+      "Bash(gh release list:*)"
+    ]
+  }
+}
