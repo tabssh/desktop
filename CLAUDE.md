@@ -447,6 +447,11 @@ CMD ["cargo", "build"]
 - **Size:** ~2GB (with toolchains + GUI deps)
 - **Purpose:** Build environment with GUI support for testing
 - **Build:** `docker build -t tabssh-builder -f docker/Dockerfile .`
+- **Tags:** 
+  - `:latest` - Always latest build
+  - `:0.1.0` - Version from Cargo.toml
+  - `:16cba3f1` - Git commit ID (8 chars)
+  - `:2512` - YYMM format (December 2025)
 
 ### Building with Docker
 
@@ -550,6 +555,7 @@ Key targets:
 - `build` - Build binaries with Docker → `./binaries/`
 - `release` - Release build with Docker → `./releases/` (includes archive, checksums, release.txt)
 - `docker` - Build Docker image with buildx (multi-arch: linux/amd64, linux/arm64)
+  - Tags: `:latest`, `:{version}`, `:{commit}`, `:{YYMM}`
 - `test` - Run all tests in Docker
 - `clean` - Remove build artifacts
 

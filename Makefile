@@ -7,6 +7,7 @@ PROJECT := tabssh
 VERSION := $(shell grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
 COMMIT := $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE := $(shell date "+%Y-%m-%d %H:%M:%S")
+YYMM := $(shell date "+%y%m")
 DOCKER_IMAGE := tabssh-builder
 DOCKER_TAG := latest
 
@@ -115,6 +116,7 @@ test:
 docker:
 	@echo "=== Building Docker image with buildx ==="
 	@echo "Platforms: linux/amd64, linux/arm64"
+	@echo "Tags: :latest :$(VERSION) :$(COMMIT) :$(YYMM)"
 	@echo ""
 	
 	@# Ensure buildx builder exists
@@ -124,16 +126,20 @@ docker:
 	@# Build multi-arch image
 	docker buildx build \
 		--platform linux/amd64,linux/arm64 \
-		--tag $(DOCKER_IMAGE):$(DOCKER_TAG) \
-		--tag $(DOCKER_IMAGE):v$(VERSION) \
+		--tag $(DOCKER_IMAGE):latest \
+		--tag $(DOCKER_IMAGE):$(VERSION) \
+		--tag $(DOCKER_IMAGE):$(COMMIT) \
+		--tag $(DOCKER_IMAGE):$(YYMM) \
 		--file docker/Dockerfile \
 		--load \
 		.
 	
 	@echo ""
 	@echo "Built images:"
-	@echo "  $(DOCKER_IMAGE):$(DOCKER_TAG)"
-	@echo "  $(DOCKER_IMAGE):v$(VERSION)"
+	@echo "  $(DOCKER_IMAGE):latest"
+	@echo "  $(DOCKER_IMAGE):$(VERSION)"
+	@echo "  $(DOCKER_IMAGE):$(COMMIT)"
+	@echo "  $(DOCKER_IMAGE):$(YYMM)"
 	@echo "Platforms: linux/amd64, linux/arm64"
 
 # Clean build artifacts
