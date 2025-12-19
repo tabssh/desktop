@@ -123,7 +123,7 @@ docker:
 	@docker buildx inspect tabssh-builder >/dev/null 2>&1 || \
 		docker buildx create --name tabssh-builder --use
 	
-	@# Build multi-arch image
+	@# Build and push multi-arch image (cannot use --load with multi-platform)
 	docker buildx build \
 		--platform linux/amd64,linux/arm64 \
 		--tag $(DOCKER_IMAGE):latest \
@@ -131,16 +131,26 @@ docker:
 		--tag $(DOCKER_IMAGE):$(COMMIT) \
 		--tag $(DOCKER_IMAGE):$(YYMM) \
 		--file docker/Dockerfile \
-		--load \
+		--push \
 		.
 	
 	@echo ""
-	@echo "Built images:"
+	@echo "Built and pushed images:"
 	@echo "  $(DOCKER_IMAGE):latest"
 	@echo "  $(DOCKER_IMAGE):$(VERSION)"
 	@echo "  $(DOCKER_IMAGE):$(COMMIT)"
 	@echo "  $(DOCKER_IMAGE):$(YYMM)"
 	@echo "Platforms: linux/amd64, linux/arm64"
+
+# Build Docker image for local use (single platform)
+docker-local:
+	@echo "=== Building local Docker image ==="
+	docker build \
+		--tag $(DOCKER_IMAGE):latest \
+		--tag $(DOCKER_IMAGE):$(VERSION) \
+		--file docker/Dockerfile \
+		.
+	@echo "Built local image: $(DOCKER_IMAGE):latest"
 
 # Clean build artifacts
 clean:

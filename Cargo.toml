@@ -12,6 +12,7 @@ tokio = { version = "1.35", features = ["full"] }
 async-trait = "0.1"
 russh = "0.40"
 russh-keys = "0.40"
+russh-sftp = "2.0"
 eframe = { version = "0.25", default-features = false, features = ["default_fonts", "glow"] }
 egui = "0.25"
 egui_extras = { version = "0.25", features = ["image"] }
@@ -35,10 +36,11 @@ security-framework = "2.9"
 windows = { version = "0.52", features = ["Win32_Security_Credentials"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-secret-service = "3.0"
+keyring = "2.1"
 
 [dev-dependencies]
 tempfile = "3.8"
+criterion = "0.5"
 
 [profile.release]
 opt-level = 3
@@ -55,3 +57,7 @@ strip = true
 [[test]]
 name = "ssh_config"
 path = "tests/ssh_config_test.rs"
+
+[[bench]]
+name = "performance"
+harness = false

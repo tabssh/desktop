@@ -1,0 +1,12 @@
+target/
+binaries/
+releases/
+.git/
+.github/
+*.md
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

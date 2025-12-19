@@ -1,12 +1,6 @@
-//! TabSSH Desktop - Cross-platform SSH/SFTP client with browser-style tabs
-//!
-//! A modern SSH client built with Rust and egui, supporting:
-//! - Multiple concurrent SSH connections in tabs
-//! - Full VT100/xterm terminal emulation
-//! - SFTP file browser and transfers
-//! - Port forwarding (local, remote, dynamic)
-//! - Secure credential storage
-//! - Cross-platform: Linux, macOS, Windows, BSD
+//! TabSSH Desktop - Cross-platform SSH/SFTP client
+
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
 mod config;
@@ -19,55 +13,40 @@ mod terminal;
 mod ui;
 mod utils;
 
-use anyhow::Result;
-use app::TabSSHApp;
-use eframe::egui;
+use app::TabSshApp;
 
-/// Application name used for window title and config paths
-const APP_NAME: &str = "TabSSH";
-
-/// Application version from Cargo.toml
-const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// Git commit ID (set at build time)
-const BUILD_COMMIT: &str = env!("TABSSH_BUILD_COMMIT");
-
-/// Build date (set at build time)
-const BUILD_DATE: &str = env!("TABSSH_BUILD_DATE");
-
-/// Full version string for display
-pub fn version_string() -> String {
-    format!("{} ({}) built {}", APP_VERSION, BUILD_COMMIT, BUILD_DATE)
-}
-
-fn main() -> Result<()> {
+fn main() -> anyhow::Result<()> {
     // Initialize logging
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .format_timestamp_millis()
-        .init();
-
-    let version = version_string();
-    log::info!("{} {} starting...", APP_NAME, version);
-
-    // Configure native options for the window
+    utils::logging::init_logging("info");
+    
+    log::info!("StartingTabSSHDesktopv{}",env!("CARGO_PKG_VERSION"));
+    
+    // Platform-specific initialization
+    #[cfg(target_os = "linux")]
+    platform::linux::setup();
+    
+    #[cfg(target_os = "macos")]
+    platform::macos::setup();
+    
+    #[cfg(target_os = "windows")]
+    platform::windows::setup();
+    
+    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
+    platform::bsd::setup();
+    
+    // Run application
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title(format!("{} - {}", APP_NAME, version))
-            .with_inner_size([1200.0, 800.0])
+            .with_inner_size([1280.0, 720.0])
             .with_min_inner_size([800.0, 600.0])
-            .with_drag_and_drop(true),
-        centered: true,
+            .with_title("TabSSH Desktop"),
         ..Default::default()
     };
-
-    // Run the egui application
+    
     eframe::run_native(
-        APP_NAME,
+        "TabSSH",
         native_options,
-        Box::new(|cc| Ok(Box::new(TabSSHApp::new(cc)))),
+        Box::new(|cc| Box::new(TabSshApp::new(cc))),
     )
-    .map_err(|e| anyhow::anyhow!("Failed to run application: {}", e))?;
-
-    log::info!("{} shutting down", APP_NAME);
-    Ok(())
+    .map_err(|e| anyhow::anyhow!("Failedtorunapplication:{}",e))
 }

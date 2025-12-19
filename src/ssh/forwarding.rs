@@ -256,7 +256,7 @@ where
             if stream.read_exact(&mut len).await.is_err() {
                 return;
             }
-            let mut domain = vec![0u8;len[0]asusize];
+            let mut domain = vec![0u8; len[0] as usize];
             if stream.read_exact(&mut domain).await.is_err() {
                 return;
             }

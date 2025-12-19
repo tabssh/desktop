@@ -111,20 +111,22 @@ impl Database {
     }
 
     // ========== Known Hosts Methods ==========
+}
 
-    /// Known host entry
-    #[derive(Debug, Clone)]
-    pub struct KnownHost {
-        pub id: String,
-        pub host: String,
-        pub port: u16,
-        pub key_type: String,
-        pub fingerprint: String,
-        pub public_key: Vec<u8>,
-        pub first_seen: String,
-        pub last_seen: String,
-    }
+/// Known host entry
+#[derive(Debug, Clone)]
+pub struct KnownHost {
+    pub id: String,
+    pub host: String,
+    pub port: u16,
+    pub key_type: String,
+    pub fingerprint: String,
+    pub public_key: Vec<u8>,
+    pub first_seen: String,
+    pub last_seen: String,
+}
 
+impl Database {
     /// Get known host by host and port
     pub fn get_known_host(&self, host: &str, port: u16) -> Result<Option<KnownHost>> {
         let mut stmt = self.conn.prepare(

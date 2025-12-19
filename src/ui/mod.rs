@@ -1,9 +1,14 @@
-//! UI module - egui-based user interface components
+//! User interface
 
+pub mod app_state;
 pub mod components;
-pub mod tab;
-mod tab_manager;
+// pub mod dialogs;  // TODO: Create dialogs module
+pub mod keyboard;
+pub mod notifications;
 pub mod screens;
+pub mod search;
 
-pub use tab::{Tab, TabStatus};
-pub use tab_manager::TabManager;
+pub use app_state::AppState;
+pub use keyboard::{KeyboardHandler, KeyboardAction};
+pub use notifications::NotificationManager;
+pub use search::SearchWidget;

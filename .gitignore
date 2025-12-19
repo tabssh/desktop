@@ -1,43 +1,17 @@
-# Rust/Cargo
-/target/
+/target
+/binaries
+/releases
+**/*.rs.bk
+*.pdb
 Cargo.lock
-
-# Build outputs
-/binaries/
-/releases/
-
-# IDE
-.idea/
-.vscode/
+.DS_Store
+.vscode
+.idea
 *.swp
 *.swo
 *~
-
-# OS
-.DS_Store
-Thumbs.db
-*.bak
-
-# Logs
-*.log
-
-# Test coverage
-*.profraw
-*.profdata
-lcov.info
-coverage/
-
-# Environment
 .env
-.env.local
-
-# Editor backup files
-*~
-\#*\#
-
-# Temporary files
-*.tmp
-*.temp
+tabssh.db
 
 # Disable reminder in prompt
 ignoredirmessage
@@ -91,6 +65,7 @@ Temporary Items
 
 ### Windows ###
 # Windows thumbnail cache files
+Thumbs.db
 Thumbs.db:encryptable
 ehthumbs.db
 ehthumbs_vista.db
