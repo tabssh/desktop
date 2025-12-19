@@ -1,5 +1,5 @@
 //! Storage module - database and persistence
 
-mod database;
+pub mod database;
 
 pub use database::Database;

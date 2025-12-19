@@ -19,9 +19,8 @@ jobs:
       
       - name: Build Docker image
         run: |
-          docker buildx build \
+          docker build \
             --tag tabssh-builder:latest \
-            --load \
             -f docker/Dockerfile .
       
       - name: Validate project structure

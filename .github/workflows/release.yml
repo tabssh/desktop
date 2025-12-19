@@ -35,13 +35,11 @@ jobs:
           COMMIT=${{ steps.version.outputs.COMMIT }}
           YYMM=${{ steps.version.outputs.YYMM }}
           
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
+          docker build \
             --tag tabssh-builder:${VERSION} \
             --tag tabssh-builder:${COMMIT} \
             --tag tabssh-builder:${YYMM} \
             --tag tabssh-builder:latest \
-            --load \
             -f docker/Dockerfile .
       
       - name: Run tests

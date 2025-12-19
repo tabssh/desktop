@@ -7,8 +7,8 @@ use russh::{Channel, ChannelId, Disconnect};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use super::ConnectionConfig;
-use crate::storage::database::Database;
+use super::{ConnectionConfig, Credentials};
+use crate::storage::database;
 
 /// Host key information for verification
 #[derive(Debug, Clone)]

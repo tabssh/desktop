@@ -2,8 +2,7 @@
 
 mod themes;
 
-#[allow(unused_imports)]
-pub use themes::{Theme, ThemeColors, ColorTheme};
+pub use themes::Theme;
 
 use serde::{Deserialize, Serialize};
 
