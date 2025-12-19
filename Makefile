@@ -1,107 +1,158 @@
 # TabSSH Desktop - Build Automation
 
-.PHONY: build release release-devel test docker clean
+.PHONY: build release test docker clean help
 
 # Configuration
 PROJECT := tabssh
 VERSION := $(shell grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
 COMMIT := $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")
-BUILD_DATE := $(shell date "+%m/%d/%Y at %H:%M:%S")
+BUILD_DATE := $(shell date "+%Y-%m-%d %H:%M:%S")
 DOCKER_IMAGE := tabssh-builder
 DOCKER_TAG := latest
 
-# Docker run with display support and build env
+# Docker run command
 DOCKER_RUN := docker run --rm \
 	-v $(PWD):/workspace \
 	-w /workspace \
-	-e DISPLAY=$(DISPLAY) \
 	-e TABSSH_BUILD_COMMIT=$(COMMIT) \
 	-e TABSSH_BUILD_DATE="$(BUILD_DATE)" \
-	-v /tmp/.X11-unix:/tmp/.X11-unix \
-	-v $(HOME)/.Xauthority:/root/.Xauthority:ro \
-	--network host \
 	$(DOCKER_IMAGE):$(DOCKER_TAG)
 
-# Build all platforms + host binary
+# Build binaries with Docker → outputs to ./binaries
 build:
 	@echo "=== Building $(PROJECT) v$(VERSION) ==="
+	@echo "Commit: $(COMMIT)"
+	@echo "Date: $(BUILD_DATE)"
+	@echo ""
 	@mkdir -p binaries
 
 	@# Build Docker image if needed
 	@docker inspect $(DOCKER_IMAGE):$(DOCKER_TAG) >/dev/null 2>&1 || \
-		docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f scripts/docker/Dockerfile .
+		(echo "Building Docker image..." && \
+		docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f docker/Dockerfile .)
 
 	@# Build for host (native binary)
-	@echo "Building $(PROJECT)..."
+	@echo "Building $(PROJECT) (native)..."
 	@$(DOCKER_RUN) cargo build --release
 	@cp target/release/$(PROJECT) binaries/$(PROJECT)
-	@strip binaries/$(PROJECT)
+	@strip binaries/$(PROJECT) 2>/dev/null || true
 
-	@# Build Linux amd64 (static)
-	@echo "Building $(PROJECT)-linux-amd64..."
+	@# Build Linux amd64 (static musl)
+	@echo "Building $(PROJECT)-linux-amd64 (musl)..."
 	@$(DOCKER_RUN) cargo build --release --target x86_64-unknown-linux-musl
 	@cp target/x86_64-unknown-linux-musl/release/$(PROJECT) binaries/$(PROJECT)-linux-amd64
-	@strip binaries/$(PROJECT)-linux-amd64
+	@strip binaries/$(PROJECT)-linux-amd64 2>/dev/null || true
 
 	@# Generate checksums
+	@echo "Generating checksums..."
 	@cd binaries && sha256sum $(PROJECT)* > checksums.txt 2>/dev/null || true
 
 	@echo ""
 	@echo "=== Build complete ==="
+	@echo "Binaries in ./binaries:"
 	@ls -lh binaries/
 
-# Release to GitHub (versioned - adds 'v' prefix)
-release: build
-	@echo "=== Releasing $(PROJECT) v$(VERSION) to GitHub ==="
-	@mkdir -p releases/v$(VERSION)
-	@cp binaries/$(PROJECT)-* releases/v$(VERSION)/
-	@cp binaries/checksums.txt releases/v$(VERSION)/
-	@cd releases/v$(VERSION) && sha256sum * > checksums.txt
-	-gh release delete v$(VERSION) --yes 2>/dev/null || true
-	-git tag -d v$(VERSION) 2>/dev/null || true
-	-git push origin :refs/tags/v$(VERSION) 2>/dev/null || true
-	gh release create v$(VERSION) \
-		--title "$(PROJECT) v$(VERSION)" \
-		--notes "**$(PROJECT) v$(VERSION)**\n\n- Commit: \`$(COMMIT)\`\n- Built: $(BUILD_DATE)" \
-		releases/v$(VERSION)/*
-	@echo "Released v$(VERSION)"
+# Release build → outputs to ./releases with archive and release.txt
+release:
+	@echo "=== Release Build $(PROJECT) v$(VERSION) ==="
+	@echo "Commit: $(COMMIT)"
+	@echo "Date: $(BUILD_DATE)"
+	@echo ""
+	@mkdir -p releases
 
-# Release devel branch (no 'v' prefix)
-release-devel: build
-	@echo "=== Releasing $(PROJECT) devel to GitHub ==="
-	@mkdir -p releases/devel
-	@cp binaries/$(PROJECT)-* releases/devel/
-	@cp binaries/checksums.txt releases/devel/
-	@cd releases/devel && sha256sum * > checksums.txt
-	-gh release delete devel --yes 2>/dev/null || true
-	-git tag -d devel 2>/dev/null || true
-	-git push origin :refs/tags/devel 2>/dev/null || true
-	git checkout -B devel 2>/dev/null || git checkout devel
-	git add -A
-	git commit -m "Release devel - $(COMMIT) - $(BUILD_DATE)" 2>/dev/null || echo "No changes"
-	git push -u origin devel --force
-	gh release create devel \
-		--target devel \
-		--title "devel" \
-		--notes "**$(PROJECT) Development Build**\n\n- Commit: \`$(COMMIT)\`\n- Built: $(BUILD_DATE)\n- Branch: devel" \
-		releases/devel/*
-	@echo "Released devel"
-
-# Run tests
-test:
+	@# Build Docker image if needed
 	@docker inspect $(DOCKER_IMAGE):$(DOCKER_TAG) >/dev/null 2>&1 || \
-		docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f scripts/docker/Dockerfile .
+		(echo "Building Docker image..." && \
+		docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f docker/Dockerfile .)
+
+	@# Build for host (native binary)
+	@echo "Building $(PROJECT) (native)..."
+	@$(DOCKER_RUN) cargo build --release
+	@cp target/release/$(PROJECT) releases/$(PROJECT)
+	@strip releases/$(PROJECT) 2>/dev/null || true
+
+	@# Build Linux amd64 (static musl)
+	@echo "Building $(PROJECT)-linux-amd64 (musl)..."
+	@$(DOCKER_RUN) cargo build --release --target x86_64-unknown-linux-musl
+	@cp target/x86_64-unknown-linux-musl/release/$(PROJECT) releases/$(PROJECT)-linux-amd64
+	@strip releases/$(PROJECT)-linux-amd64 2>/dev/null || true
+
+	@# Generate checksums
+	@echo "Generating checksums..."
+	@cd releases && sha256sum $(PROJECT)* > checksums.txt 2>/dev/null || true
+
+	@# Write release.txt
+	@echo "Writing release.txt..."
+	@echo "$(VERSION)" > releases/release.txt
+	@echo "Commit: $(COMMIT)" >> releases/release.txt
+	@echo "Built: $(BUILD_DATE)" >> releases/release.txt
+
+	@# Create source archive (exclude VCS files)
+	@echo "Creating source archive..."
+	@tar --exclude-vcs \
+		--exclude='./target' \
+		--exclude='./binaries' \
+		--exclude='./releases' \
+		-czf releases/$(PROJECT)-$(VERSION)-source.tar.gz \
+		--transform="s,^\.,$(PROJECT)-$(VERSION)," \
+		.
+
+	@echo ""
+	@echo "=== Release complete ==="
+	@echo "Release files in ./releases:"
+	@ls -lh releases/
+	@echo ""
+	@cat releases/release.txt
+
+# Run tests in Docker
+test:
+	@echo "=== Running tests ==="
+	@docker inspect $(DOCKER_IMAGE):$(DOCKER_TAG) >/dev/null 2>&1 || \
+		docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f docker/Dockerfile .
 	@$(DOCKER_RUN) cargo test
 
-# Build and push Docker image to ghcr.io
+# Build Docker image with buildx (multi-arch: amd64, arm64)
 docker:
-	@echo "=== Building and pushing Docker image ==="
-	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f scripts/docker/Dockerfile .
-	docker tag $(DOCKER_IMAGE):$(DOCKER_TAG) $(DOCKER_IMAGE):v$(VERSION)
-	docker push $(DOCKER_IMAGE):$(DOCKER_TAG)
-	docker push $(DOCKER_IMAGE):v$(VERSION)
-	@echo "Pushed $(DOCKER_IMAGE):$(DOCKER_TAG) and $(DOCKER_IMAGE):v$(VERSION)"
+	@echo "=== Building Docker image with buildx ==="
+	@echo "Platforms: linux/amd64, linux/arm64"
+	@echo ""
+	
+	@# Ensure buildx builder exists
+	@docker buildx inspect tabssh-builder >/dev/null 2>&1 || \
+		docker buildx create --name tabssh-builder --use
+	
+	@# Build multi-arch image
+	docker buildx build \
+		--platform linux/amd64,linux/arm64 \
+		--tag $(DOCKER_IMAGE):$(DOCKER_TAG) \
+		--tag $(DOCKER_IMAGE):v$(VERSION) \
+		--file docker/Dockerfile \
+		--load \
+		.
+	
+	@echo ""
+	@echo "Built images:"
+	@echo "  $(DOCKER_IMAGE):$(DOCKER_TAG)"
+	@echo "  $(DOCKER_IMAGE):v$(VERSION)"
+	@echo "Platforms: linux/amd64, linux/arm64"
 
 # Clean build artifacts
 clean:
+	@echo "=== Cleaning build artifacts ==="
 	rm -rf target binaries releases
+	@echo "Cleaned: target/ binaries/ releases/"
+
+# Help
+help:
+	@echo "TabSSH Desktop - Build System"
+	@echo ""
+	@echo "Available targets:"
+	@echo "  make build     - Build binaries with Docker → ./binaries"
+	@echo "  make release   - Release build with archive → ./releases"
+	@echo "  make test      - Run tests in Docker"
+	@echo "  make docker    - Build Docker image (buildx multi-arch: amd64, arm64)"
+	@echo "  make clean     - Remove build artifacts"
+	@echo "  make help      - Show this help"
+	@echo ""
+	@echo "Current version: $(VERSION)"
+	@echo "Current commit:  $(COMMIT)"
