@@ -26,8 +26,23 @@ jobs:
           echo "COMMIT=$COMMIT" >> $GITHUB_OUTPUT
           echo "YYMM=$YYMM" >> $GITHUB_OUTPUT
       
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
       - name: Build Docker image
-        run: make docker
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          COMMIT=${{ steps.version.outputs.COMMIT }}
+          YYMM=${{ steps.version.outputs.YYMM }}
+          
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --tag tabssh-builder:${VERSION} \
+            --tag tabssh-builder:${COMMIT} \
+            --tag tabssh-builder:${YYMM} \
+            --tag tabssh-builder:latest \
+            --load \
+            -f docker/Dockerfile .
       
       - name: Run tests
         run: |
