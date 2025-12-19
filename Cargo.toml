@@ -6,64 +6,39 @@ authors = ["TabSSH Contributors"]
 license = "MIT"
 description = "Cross-platform SSH/SFTP client with browser-style tabs"
 repository = "https://github.com/tabssh/desktop"
-keywords = ["ssh", "sftp", "terminal", "client"]
-categories = ["command-line-utilities", "network-programming"]
-rust-version = "1.75"
 
 [dependencies]
-# Async runtime
 tokio = { version = "1.35", features = ["full"] }
 async-trait = "0.1"
-futures = "0.3"
-
-# SSH
-russh = "0.45"
-russh-keys = "0.45"
-
-# UI (egui) - using 0.28 for Rust 1.84 compatibility
-eframe = { version = "0.28", default-features = false, features = ["default_fonts", "glow", "persistence"] }
-egui = "0.28"
-egui_extras = { version = "0.28", features = ["image"] }
-
-# Terminal emulation
+russh = "0.40"
+russh-keys = "0.40"
+eframe = { version = "0.25", default-features = false, features = ["default_fonts", "glow"] }
+egui = "0.25"
+egui_extras = { version = "0.25", features = ["image"] }
 vte = "0.13"
-
-# Storage
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.30", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"
-
-# Crypto
-ring = "0.17"
-argon2 = "0.5"
-
-# Keychain (cross-platform)
-keyring = "3"
-
-# Utilities
 anyhow = "1.0"
-thiserror = "2.0"
+thiserror = "1.0"
 log = "0.4"
 env_logger = "0.11"
 dirs = "5.0"
-chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.0", features = ["v4"] }
-once_cell = "1.19"
-shellexpand = "3.1"
+chrono = "0.4"
+uuid = { version = "1.6", features = ["v4", "serde"] }
 
-# Platform-specific
 [target.'cfg(target_os = "macos")'.dependencies]
-security-framework = "2.11"
+security-framework = "2.9"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.58", features = ["Win32_Security_Credentials"] }
+windows = { version = "0.52", features = ["Win32_Security_Credentials"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-# secret-service for Linux keyring (optional, keyring crate handles this)
+secret-service = "3.0"
 
-[profile.dev]
-opt-level = 1
+[dev-dependencies]
+tempfile = "3.8"
 
 [profile.release]
 opt-level = 3
@@ -77,6 +52,6 @@ inherits = "release"
 opt-level = "z"
 strip = true
 
-[[bin]]
-name = "ssh_test"
-path = "src/bin/ssh_test.rs"
+[[test]]
+name = "ssh_config"
+path = "tests/ssh_config_test.rs"
