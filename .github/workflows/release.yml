@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Get version info
+        id: version
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG_NAME#v}
+          COMMIT=$(git rev-parse --short=8 HEAD)
+          YYMM=$(date "+%y%m")
+          
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "COMMIT=$COMMIT" >> $GITHUB_OUTPUT
+          echo "YYMM=$YYMM" >> $GITHUB_OUTPUT
+      
+      - name: Build Docker image
+        run: make docker
+      
+      - name: Run tests
+        run: |
+          docker run --rm -v $(pwd):/workspace -w /workspace tabssh-builder:latest \
+            cargo test --verbose
+      
+      - name: Build Linux amd64
+        run: |
+          docker run --rm -v $(pwd):/workspace -w /workspace tabssh-builder:latest \
+            cargo build --release --target x86_64-unknown-linux-musl
+          cp target/x86_64-unknown-linux-musl/release/tabssh \
+            tabssh-linux-amd64-${{ steps.version.outputs.VERSION }}
+          strip tabssh-linux-amd64-${{ steps.version.outputs.VERSION }} || true
+      
+      - name: Generate checksums
+        run: sha256sum tabssh-* > checksums-${{ steps.version.outputs.VERSION }}.txt
+      
+      - name: Create source archive
+        run: |
+          tar --exclude-vcs --exclude='./target' --exclude='./binaries' --exclude='./releases' \
+            -czf tabssh-${{ steps.version.outputs.VERSION }}-source.tar.gz .
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            tabssh-linux-amd64-${{ steps.version.outputs.VERSION }}
+            tabssh-${{ steps.version.outputs.VERSION }}-source.tar.gz
+            checksums-${{ steps.version.outputs.VERSION }}.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

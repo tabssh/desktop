@@ -8,6 +8,91 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use super::ConnectionConfig;
+use crate::storage::database::Database;
+
+/// Host key information for verification
+#[derive(Debug, Clone)]
+pub struct HostKeyInfo {
+    pub host: String,
+    pub port: u16,
+    pub key_type: String,
+    pub fingerprint: String,
+    pub key_data: Vec<u8>,
+}
+
+impl HostKeyInfo {
+    pub fn from_public_key(host: &str, port: u16, key: &key::PublicKey) -> Self {
+        let fingerprint = key.fingerprint();
+        let key_type = key.name().to_string();
+        
+        Self {
+            host: host.to_string(),
+            port,
+            key_type,
+            fingerprint,
+            key_data: key.public_key_bytes(),
+        }
+    }
+}
+
+/// Verify host key against known hosts in database
+pub async fn verify_host_key(
+    host: &str,
+    port: u16,
+    key: &key::PublicKey,
+    database: Option<&Database>,
+) -> Result<bool> {
+    let key_info = HostKeyInfo::from_public_key(host, port, key);
+    
+    // If no database, accept (for testing/initial connection)
+    let db = match database {
+        Some(d) => d,
+        None => {
+            log::warn!("No database available for host key verification");
+            return Ok(true);
+        }
+    };
+    
+    // Check if host is known
+    match db.get_known_host(&key_info.host, key_info.port)? {
+        Some(known_key) => {
+            // Host is known, verify fingerprint matches
+            if known_key.fingerprint == key_info.fingerprint {
+                log::info!("Host key verified for {}:{}", host, port);
+                // Update last_seen timestamp
+                db.update_known_host_last_seen(&key_info.host, key_info.port)?;
+                Ok(true)
+            } else {
+                // MITM ATTACK DETECTED!
+                log::error!(
+                    "⚠️  HOST KEY MISMATCH for {}:{} - Possible MITM attack!",
+                    host, port
+                );
+                log::error!("Expected: {}", known_key.fingerprint);
+                log::error!("Got:      {}", key_info.fingerprint);
+                Err(anyhow!(
+                    "Host key verification failed! Expected {}, got {}",
+                    known_key.fingerprint,
+                    key_info.fingerprint
+                ))
+            }
+        }
+        None => {
+            // First time seeing this host - should prompt user
+            log::info!("New host {}:{} with fingerprint: {}", host, port, key_info.fingerprint);
+            // For now, auto-accept and store (in production, should show dialog)
+            db.add_known_host(
+                &key_info.host,
+                key_info.port,
+                &key_info.key_type,
+                &key_info.fingerprint,
+                &key_info.key_data,
+            )?;
+            log::info!("Added new host key to known_hosts");
+            Ok(true)
+        }
+    }
+}
 
 /// SSH client handler for russh callbacks
 pub struct SshClientHandler {

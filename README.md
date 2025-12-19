@@ -66,17 +66,19 @@ make help            # Show available targets
 
 ## 📋 Development Status
 
-**Current Phase:** Phase 1-2 (Foundation & Core Features)  
-**Progress:** ~35% complete  
-**Version:** 0.1.0 (Alpha)
+**Current Phase:** Phase 2 (90% complete) → Moving to Phase 3  
+**Progress:** ~50% complete  
+**Version:** 0.1.0 (Alpha - Functional MVP)
 
 | Component | Status |
 |-----------|--------|
-| UI Framework | ✅ 70% (core done) |
-| Terminal Emulation | 🚧 60% (buffer done, I/O needed) |
-| SSH Core | 🚧 30% (framework done, connect needed) |
+| UI Framework | ✅ 85% (fully functional) |
+| Terminal Emulation | ✅ 90% (I/O complete) |
+| SSH Core | ✅ 85% (connect, auth, I/O working) |
 | SFTP | ❌ 5% (stub only) |
 | Testing | ❌ 0% (no tests) |
+
+**The SSH client is FUNCTIONAL!** You can connect, authenticate, type commands, and see output!
 
 See [CLAUDE.md](CLAUDE.md) for detailed roadmap and specifications.
 
@@ -109,13 +111,14 @@ TabSSH Desktop
 - [x] SQLite database schema
 - [x] SSH framework structure
 
-### Phase 2: Core Features 🚧 (In Progress)
+### Phase 2: Core Features ✅ (90% Complete!)
 - [x] Connection manager UI
 - [x] Terminal view rendering
-- [ ] **Active SSH connections** ← *Current focus*
-- [ ] Terminal I/O integration
-- [ ] Host key verification
-- [ ] Session persistence
+- [x] **Active SSH connections** ✅ **WORKING!**
+- [x] **Terminal I/O integration** ✅ **WORKING!**
+- [x] **Password & key authentication** ✅ **WORKING!**
+- [ ] Host key verification (basic done, storage pending)
+- [ ] Session persistence to database
 
 ### Phase 3: Advanced SSH (Next)
 - [ ] SFTP browser

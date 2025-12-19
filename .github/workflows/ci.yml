@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Build Docker image
+        run: make docker
+      
+      - name: Validate project structure
+        run: |
+          echo "🔍 Validating TabSSH Desktop structure..."
+          test -f "Cargo.toml" && echo "✅ Cargo.toml exists"
+          test -f "Makefile" && echo "✅ Makefile exists"
+          test -f "docker/Dockerfile" && echo "✅ Dockerfile exists"
+          test -d "src" && echo "✅ src/ directory exists"
+          echo "✅ Project structure validation passed"
+      
+      - name: Compile check
+        run: |
+          docker run --rm -v $(pwd):/workspace -w /workspace tabssh-builder:latest \
+            cargo check --all-targets --verbose
+      
+      - name: Clippy (linting)
+        run: |
+          docker run --rm -v $(pwd):/workspace -w /workspace tabssh-builder:latest \
+            cargo clippy -- -D warnings
+      
+      - name: Format check
+        run: |
+          docker run --rm -v $(pwd):/workspace -w /workspace tabssh-builder:latest \
+            cargo fmt --check
+      
+      - name: Run tests
+        run: |
+          docker run --rm -v $(pwd):/workspace -w /workspace tabssh-builder:latest \
+            cargo test --verbose
+      
+      - name: Security audit
+        continue-on-error: true
+        run: |
+          docker run --rm -v $(pwd):/workspace -w /workspace tabssh-builder:latest \
+            cargo audit
+      
+      - name: Build debug
+        run: make build
+      
+      - name: Verify binaries
+        run: |
+          ls -lh binaries/
+          file binaries/tabssh* || true
+      
+      - name: Feature validation
+        run: |
+          echo "📊 Implementation stats:"
+          echo "   Rust files: $(find src -name '*.rs' | wc -l)"
+          echo "   Lines of code: $(find src -name '*.rs' -exec wc -l {} \; | awk '{total += $1} END {print total}')"
+          echo "   Test files: $(find tests -name '*.rs' 2>/dev/null | wc -l || echo 0)"

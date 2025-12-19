@@ -109,4 +109,117 @@ impl Database {
     pub fn connection(&self) -> &Connection {
         &self.conn
     }
+
+    // ========== Known Hosts Methods ==========
+
+    /// Known host entry
+    #[derive(Debug, Clone)]
+    pub struct KnownHost {
+        pub id: String,
+        pub host: String,
+        pub port: u16,
+        pub key_type: String,
+        pub fingerprint: String,
+        pub public_key: Vec<u8>,
+        pub first_seen: String,
+        pub last_seen: String,
+    }
+
+    /// Get known host by host and port
+    pub fn get_known_host(&self, host: &str, port: u16) -> Result<Option<KnownHost>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, host, port, key_type, fingerprint, public_key, first_seen, last_seen 
+             FROM known_hosts WHERE host = ?1 AND port = ?2"
+        )?;
+
+        let result = stmt.query_row(rusqlite::params![host, port], |row| {
+            Ok(KnownHost {
+                id: row.get(0)?,
+                host: row.get(1)?,
+                port: row.get::<_, i64>(2)? as u16,
+                key_type: row.get(3)?,
+                fingerprint: row.get(4)?,
+                public_key: row.get(5)?,
+                first_seen: row.get(6)?,
+                last_seen: row.get(7)?,
+            })
+        });
+
+        match result {
+            Ok(host) => Ok(Some(host)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Add new known host
+    pub fn add_known_host(
+        &self,
+        host: &str,
+        port: u16,
+        key_type: &str,
+        fingerprint: &str,
+        public_key: &[u8],
+    ) -> Result<()> {
+        use uuid::Uuid;
+        
+        let id = Uuid::new_v4().to_string();
+        let now = chrono::Local::now().to_rfc3339();
+
+        self.conn.execute(
+            "INSERT INTO known_hosts (id, host, port, key_type, fingerprint, public_key, first_seen, last_seen)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            rusqlite::params![id, host, port as i64, key_type, fingerprint, public_key, &now, &now],
+        )?;
+
+        log::info!("Added known host: {}:{} ({})", host, port, fingerprint);
+        Ok(())
+    }
+
+    /// Update last_seen timestamp for known host
+    pub fn update_known_host_last_seen(&self, host: &str, port: u16) -> Result<()> {
+        let now = chrono::Local::now().to_rfc3339();
+        
+        self.conn.execute(
+            "UPDATE known_hosts SET last_seen = ?1 WHERE host = ?2 AND port = ?3",
+            rusqlite::params![&now, host, port as i64],
+        )?;
+
+        Ok(())
+    }
+
+    /// Remove known host
+    pub fn remove_known_host(&self, host: &str, port: u16) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM known_hosts WHERE host = ?1 AND port = ?2",
+            rusqlite::params![host, port as i64],
+        )?;
+
+        log::info!("Removed known host: {}:{}", host, port);
+        Ok(())
+    }
+
+    /// Get all known hosts
+    pub fn list_known_hosts(&self) -> Result<Vec<KnownHost>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, host, port, key_type, fingerprint, public_key, first_seen, last_seen 
+             FROM known_hosts ORDER BY last_seen DESC"
+        )?;
+
+        let hosts = stmt.query_map([], |row| {
+            Ok(KnownHost {
+                id: row.get(0)?,
+                host: row.get(1)?,
+                port: row.get::<_, i64>(2)? as u16,
+                key_type: row.get(3)?,
+                fingerprint: row.get(4)?,
+                public_key: row.get(5)?,
+                first_seen: row.get(6)?,
+                last_seen: row.get(7)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(hosts)
+    }
 }
