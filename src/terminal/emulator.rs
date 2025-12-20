@@ -24,7 +24,7 @@ impl TerminalEmulator {
             scrollback: Vec::new(),
             cursor_row: 0,
             cursor_col: 0,
-            parser: VtParser::new(cols, rows),
+            parser: VtParser::new(),
         }
     }
 

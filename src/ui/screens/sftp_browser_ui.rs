@@ -37,13 +37,13 @@ impl SftpBrowserScreen {
         ui.horizontal(|ui| {
             if ui.button("⬆ Up").clicked() {
                 if let Some(path) = self.browser.go_up() {
-                    self.current_path_input = path.to_string_lossy().to_string();
+                    self.current_path_input = path.to_string_lossy().into_owned();
                 }
             }
             
             if ui.button("🏠 Home").clicked() {
                 let path = self.browser.go_home();
-                self.current_path_input = path.to_string_lossy().to_string();
+                self.current_path_input = path.to_string_lossy().into_owned();
             }
             
             if ui.button("🔄 Refresh").clicked() {
@@ -104,14 +104,14 @@ impl SftpBrowserScreen {
                         if matches!(entry.file_type,crate::sftp::FileType::Directory){
                             let new_path = self.browser.get_full_path(entry);
                             self.browser.change_directory(new_path.clone());
-                            self.current_path_input = new_path.to_string_lossy().to_string();
+                            self.current_path_input = new_path.to_string_lossy().into_owned();
                         }
                     }
                     
                     ui.label(format!("{} bytes", entry.size));
                     
                     if let Some(modified) = &entry.modified {
-                        ui.label(modified.format("%Y-%m-%d %H:%M").to_string());
+                        ui.label(format!("{}", modified.format("%Y-%m-%d %H:%M")));
                     }
                 });
             }

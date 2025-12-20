@@ -29,7 +29,7 @@ impl HostKeyInfo {
             port,
             key_type,
             fingerprint,
-            key_data: key.public_key_bytes(),
+            key_data: key.public_key_base64().into_bytes(),
         }
     }
 }
