@@ -15,7 +15,7 @@ impl ConnectionListScreen {
         }
     }
     
-    pub fn render(&mut self, ctx: &Context, ui: &mut Ui) -> Option<ConnectionAction> {
+    pub fn render(&mut self, _ctx: &Context, ui: &mut Ui) -> Option<ConnectionAction> {
         let mut action = None;
         
         ui.heading("Connections");
@@ -48,7 +48,7 @@ impl ConnectionListScreen {
         action
     }
     
-    fn render_connection_list(&mut self, ui: &mut Ui, action: &mut Option<ConnectionAction>, recent_only: bool) {
+    fn render_connection_list(&mut self, ui: &mut Ui, action: &mut Option<ConnectionAction>, _recent_only: bool) {
         let connections = vec![
             ("Production Server", "prod.example.com", "22", "admin"),
             ("Dev Server", "dev.example.com", "22", "user"),

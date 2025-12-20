@@ -28,6 +28,11 @@ env_logger = "0.11"
 dirs = "5.0"
 chrono = "0.4"
 uuid = { version = "1.6", features = ["v4", "serde"] }
+shellexpand = "3.1"
+
+[lib]
+name = "tabssh"
+path = "src/lib.rs"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = "2.9"

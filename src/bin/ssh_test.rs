@@ -6,7 +6,7 @@ use tokio::runtime::Runtime;
 use anyhow::Result;
 
 use russh::client;
-use russh::keys::key;
+use russh_keys::key;
 use russh::{ChannelMsg, Disconnect};
 
 struct TestHandler {
@@ -175,7 +175,13 @@ fn main() {
             runtime.block_on(run_ssh_test_password(host, port, username, credential))
         }
         "-k" | "--key" => {
-            let key_path = shellexpand::tilde(credential);
+            let key_path = if credential.starts_with('~') {
+                dirs::home_dir()
+                    .map(|h| h.join(credential.trim_start_matches("~/")))
+                    .unwrap_or_else(|| std::path::PathBuf::from(credential))
+            } else {
+                std::path::PathBuf::from(credential)
+            };
             runtime.block_on(run_ssh_test_key(host, port, username, &key_path))
         }
         _ => {

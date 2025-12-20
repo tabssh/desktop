@@ -1,44 +1,74 @@
+//! Terminal emulator implementation
 
-/// Search in terminal buffer
-pub fn search(&self, pattern: &str, case_sensitive: bool) -> Vec<(usize, usize)> {
-    let mut matches = Vec::new();
-    let pattern = if case_sensitive {
-        pattern.to_string()
-    } else {
-        pattern.to_lowercase()
-    };
-    
-    for (row_idx, line) in self.scrollback.iter().enumerate() {
-        let text = line.iter().map(|cell| cell.c).collect::<String>();
-        let text = if case_sensitive {
-            text
-        } else {
-            text.to_lowercase()
-        };
-        
-        let mut start = 0;
-        while let Some(pos) = text[start..].find(&pattern) {
-            matches.push((row_idx, start + pos));
-            start += pos + 1;
+use super::vt::{VtParser, Cell, CellStyle, AnsiColor};
+
+/// Terminal emulator state
+pub struct TerminalEmulator {
+    /// Terminal title
+    title: String,
+    /// Scrollback buffer
+    scrollback: Vec<Vec<Cell>>,
+    /// Current cursor row
+    cursor_row: usize,
+    /// Current cursor column
+    cursor_col: usize,
+    /// VT parser
+    parser: VtParser,
+}
+
+impl TerminalEmulator {
+    /// Create new terminal emulator
+    pub fn new(cols: usize, rows: usize) -> Self {
+        Self {
+            title: String::new(),
+            scrollback: Vec::new(),
+            cursor_row: 0,
+            cursor_col: 0,
+            parser: VtParser::new(cols, rows),
         }
     }
-    
-    matches
-}
 
-/// Clear terminal
-pub fn clear(&mut self) {
-    self.scrollback.clear();
-    self.cursor_row = 0;
-    self.cursor_col = 0;
-}
+    /// Search in terminal buffer
+    pub fn search(&self, pattern: &str, case_sensitive: bool) -> Vec<(usize, usize)> {
+        let mut matches = Vec::new();
+        let pattern = if case_sensitive {
+            pattern.to_string()
+        } else {
+            pattern.to_lowercase()
+        };
+        
+        for (row_idx, line) in self.scrollback.iter().enumerate() {
+            let text = line.iter().map(|cell| cell.c).collect::<String>();
+            let text = if case_sensitive {
+                text
+            } else {
+                text.to_lowercase()
+            };
+            
+            let mut start = 0;
+            while let Some(pos) = text[start..].find(&pattern) {
+                matches.push((row_idx, start + pos));
+                start += pos + 1;
+            }
+        }
+        
+        matches
+    }
 
-/// Get terminal title
-pub fn title(&self) -> &str {
-    &self.title
-}
+    /// Clear terminal
+    pub fn clear(&mut self) {
+        self.scrollback.clear();
+        self.cursor_row = 0;
+        self.cursor_col = 0;
+    }
 
-/// Set terminal title
-pub fn set_title(&mut self, title: String) {
-    self.title = title;
+    /// Get terminal title
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    /// Set terminal title
+    pub fn set_title(&mut self, title: String) {
+        self.title = title;
+    }
 }

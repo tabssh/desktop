@@ -1,6 +1,6 @@
 //! Configuration module - settings and themes
 
-mod themes;
+pub mod themes;
 
 pub use themes::Theme;
 

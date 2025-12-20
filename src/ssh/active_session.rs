@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use russh::client::{self, Handle};
-use russh::keys::key;
+use russh_keys::key;
 use russh::{ChannelMsg, Disconnect};
 use std::sync::Arc;
 use tokio::sync::mpsc;

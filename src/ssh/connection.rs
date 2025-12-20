@@ -2,13 +2,12 @@
 
 use anyhow::{anyhow, Result};
 use russh::client::{self, Handle};
-use russh::keys::key;
+use russh_keys::key;
 use russh::{Channel, ChannelId, Disconnect};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use super::{ConnectionConfig, Credentials};
-use crate::storage::database;
 
 /// Host key information for verification
 #[derive(Debug, Clone)]

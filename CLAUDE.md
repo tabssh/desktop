@@ -66,6 +66,23 @@
 - ⚡ **High Performance** - Async I/O, efficient terminal emulation
 - 🌍 **True Cross-Platform** - Windows, Linux, macOS, BSD (amd64 + arm64)
 
+### 🐳 Docker-First Development
+
+**CRITICAL: Rust is NOT installed locally. ALL operations use Docker.**
+
+- ✅ All builds use Docker (via Makefile)
+- ✅ All tests run in Docker containers
+- ✅ CI/CD uses Docker exclusively
+- ✅ Cross-compilation via Docker with musl targets
+- ✅ No local Rust toolchain required
+
+```bash
+make build      # Builds with Docker → ./binaries
+make test       # Tests in Docker
+make release    # Release build → ./releases
+make docker     # Multi-arch Docker image (amd64, arm64)
+```
+
 ---
 
 ## Binary Naming Convention

@@ -22,7 +22,7 @@ impl ForwardingScreen {
         }
     }
     
-    pub fn render(&mut self, ctx: &Context, ui: &mut Ui) -> Option<ForwardingAction> {
+    pub fn render(&mut self, _ctx: &Context, ui: &mut Ui) -> Option<ForwardingAction> {
         let mut action = None;
         
         ui.heading("Port Forwarding");

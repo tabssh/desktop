@@ -15,6 +15,24 @@
 
 ---
 
+## 🐳 Prerequisites
+
+**IMPORTANT:** Rust is NOT installed locally. ALL builds, tests, and development tasks use Docker.
+
+- **Docker** - Required for all operations (build, test, development)
+- **Make** - Build automation (runs Docker commands)
+- **Git** - Version control
+
+**Quick Start:**
+```bash
+make build      # Build with Docker → ./binaries
+make test       # Run tests in Docker
+make release    # Release build → ./releases
+make docker     # Build multi-arch Docker image
+```
+
+---
+
 ## 🎯 Features
 
 ### ✅ Complete Feature Set (100%)

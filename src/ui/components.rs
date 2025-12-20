@@ -226,7 +226,7 @@ pub fn password_input(ui: &mut egui::Ui, value: &mut String, hint: &str) -> egui
         .text_color(colors::TEXT_PRIMARY)
         .password(true)
         .desired_width(200.0)
-        .margin(egui::Margin::symmetric(8.0, 6.0));
+        .margin(egui::vec2(8.0, 6.0));
     ui.add(input)
 }
 
@@ -237,7 +237,7 @@ pub fn number_input(ui: &mut egui::Ui, value: &mut u16, min: u16, max: u16) -> e
         egui::TextEdit::singleline(&mut text)
             .text_color(colors::TEXT_PRIMARY)
             .desired_width(80.0)
-            .margin(egui::Margin::symmetric(8.0, 6.0))
+            .margin(egui::vec2(8.0, 6.0))
     );
 
     if response.changed() {
