@@ -33,6 +33,21 @@ pub struct CellStyle {
     pub dim: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Cell {
+    pub c: char,
+    pub style: CellStyle,
+}
+
+impl Default for Cell {
+    fn default() -> Self {
+        Self {
+            c: ' ',
+            style: CellStyle::default(),
+        }
+    }
+}
+
 impl Default for CellStyle {
     fn default() -> Self {
         Self {

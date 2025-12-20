@@ -49,7 +49,7 @@ impl KeychainManager {
     pub fn delete_password(&self, service: &str, account: &str) -> Result<()> {
         use keyring::Entry;
         let entry = Entry::new(service, account)?;
-        entry.delete_credential()?;
+        entry.delete_password()?;
         Ok(())
     }
     

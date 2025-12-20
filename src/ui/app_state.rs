@@ -36,7 +36,8 @@ impl AppState {
         let db = Database::open()?;
         let settings = Settings::load(&db)?;
         let theme_manager = ThemeManager::new();
-        let session_manager = SessionManager::new();
+        let runtime = std::sync::Arc::new(tokio::runtime::Runtime::new()?);
+        let session_manager = SessionManager::new(runtime);
         let notification_manager = NotificationManager::new();
         
         Ok(Self {

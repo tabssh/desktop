@@ -111,7 +111,7 @@ pub fn toggle(ui: &mut egui::Ui, enabled: &mut bool) -> egui::Response {
     }
 
     if ui.is_rect_visible(rect) {
-        let how_on = ui.ctx().animate_bool_responsive(response.id, *enabled);
+        let how_on = ui.ctx().animate_bool(response.id, *enabled);
 
         let bg_color = Color32::from_rgb(
             (colors::BG_TERTIARY.r() as f32 + (colors::PRIMARY.r() as f32 - colors::BG_TERTIARY.r() as f32) * how_on) as u8,
@@ -205,7 +205,7 @@ pub fn text_input(ui: &mut egui::Ui, value: &mut String, hint: &str) -> egui::Re
         .hint_text(RichText::new(hint).color(colors::TEXT_MUTED))
         .text_color(colors::TEXT_PRIMARY)
         .desired_width(200.0)
-        .margin(egui::Margin::symmetric(8.0, 6.0));
+        .margin(egui::vec2(8.0, 6.0));
     ui.add(input)
 }
 

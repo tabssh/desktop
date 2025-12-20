@@ -59,7 +59,7 @@ impl eframe::App for TabSshApp {
                     log::info!("Opensettings");
                 }
                 KeyboardAction::Quit => {
-                    frame.close();
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
                 _ => {}
             }

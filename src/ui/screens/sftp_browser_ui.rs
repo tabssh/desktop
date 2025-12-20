@@ -37,7 +37,7 @@ impl SftpBrowserScreen {
         ui.horizontal(|ui| {
             if ui.button("⬆ Up").clicked() {
                 if let Some(path) = self.browser.go_up() {
-                    self.current_path_input = path.display().to_string();
+                    self.current_path_input = path.to_string_lossy().to_string();
                 }
             }
             
@@ -111,7 +111,7 @@ impl SftpBrowserScreen {
                     ui.label(format!("{} bytes", entry.size));
                     
                     if let Some(modified) = &entry.modified {
-                        ui.label(format!("{}", modified.format("%Y-%m-%d %H:%M")));
+                        ui.label(modified.format("%Y-%m-%d %H:%M").to_string());
                     }
                 });
             }
