@@ -3,11 +3,13 @@
 use anyhow::{anyhow, Result};
 use russh::client::{self, Handle};
 use russh_keys::key;
+use russh_keys::PublicKeyBase64;
 use russh::{Channel, ChannelId, Disconnect};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use super::{ConnectionConfig, Credentials};
+use crate::storage::Database;
 
 /// Host key information for verification
 #[derive(Debug, Clone)]
@@ -298,19 +300,20 @@ pub async fn connect_through_jump_host(
         host: jump_host.to_string(),
         port: jump_port,
         username: jump_user.to_string(),
+        auth_type: super::AuthType::Password,  // Will be set based on credentials
         timeout: 30,
         keepalive: 60,
         compression: false,
     };
     
     let jump_conn = match jump_creds {
-        Credentials::Password(pwd) => {
-            SshConnection::connect_password(jump_config, pwd).await?
+        Credentials::Password { password } => {
+            SshConnection::connect_password(jump_config, password).await?
         }
-        Credentials::PublicKey(key_path, passphrase) => {
+        Credentials::PublicKey { key_path, passphrase } => {
             SshConnection::connect_key(jump_config, key_path, passphrase.as_deref()).await?
         }
-        _ => return Err(anyhow!("Unsupportedcredentialtypeforjumphost")),
+        _ => return Err(anyhow!("Unsupported credential type for jump host")),
     };
     
     // Open direct-tcpip channel through jump host to target

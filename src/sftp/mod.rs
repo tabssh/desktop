@@ -3,9 +3,13 @@
 #![allow(dead_code)]
 
 mod client;
+mod browser;
+mod operations;
+mod transfer;
 
 #[allow(unused_imports)]
 pub use client::{
+    SftpClient,
     TransferTask,
     read_local_directory,
     create_local_directory,
@@ -13,6 +17,10 @@ pub use client::{
     format_file_size,
     format_permissions,
 };
+
+pub use browser::{SftpBrowser, SortColumn};
+pub use operations::SftpOperations;
+pub use transfer::TransferManager;
 
 /// File entry type
 #[derive(Debug, Clone, PartialEq)]
@@ -25,6 +33,17 @@ pub enum FileType {
     Symlink,
     /// Other (device, socket, etc.)
     Other,
+}
+
+impl std::fmt::Display for FileType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FileType::File => write!(f, "File"),
+            FileType::Directory => write!(f, "Directory"),
+            FileType::Symlink => write!(f, "Symlink"),
+            FileType::Other => write!(f, "Other"),
+        }
+    }
 }
 
 /// Remote file entry

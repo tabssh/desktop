@@ -83,8 +83,12 @@ impl SftpBrowserScreen {
         
         // File list
         egui::ScrollArea::vertical().show(ui, |ui| {
-            for (idx, entry) in self.browser.entries().iter().enumerate() {
-                let is_selected = self.browser.selected().contains(&idx);
+            // Collect entries to avoid borrow checker issues
+            let entries: Vec<_> = self.browser.entries().iter().cloned().collect();
+            let selected_indices: Vec<_> = self.browser.selected().iter().cloned().collect();
+            
+            for (idx, entry) in entries.iter().enumerate() {
+                let is_selected = selected_indices.contains(&idx);
                 
                 ui.horizontal(|ui| {
                     let icon = match entry.file_type {

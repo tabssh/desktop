@@ -1,6 +1,7 @@
 //! TabSSH Desktop - Cross-platform SSH/SFTP client
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![allow(dead_code, unused_variables, unused_imports)]  // TODO: Remove after fixing compilation errors
 
 mod app;
 mod config;
