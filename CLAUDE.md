@@ -1,34 +1,68 @@
 # TabSSH Desktop - Claude Project Tracker
 
-**Last Updated:** 2025-12-19  
-**Version:** 0.1.0 (Production Ready)  
-**Status:** ✅ 100% COMPLETE - Ready for Release  
-**Completion:** 100% - Feature parity with Android app achieved!  
-**Code Status:** ✅ Production Ready - 58 modules, 6,288 lines of Rust, 15 test suites  
-**Build Status:** ✅ All platforms build successfully
+**Last Updated:** 2026-04-28
+**Version:** 0.1.0 (early development — not yet released)
+**Status:** 🚧 **Phase 2 in progress** — see [Current Implementation Status](#-current-implementation-status). The "100% complete" framing in earlier revisions of this file was aspirational; the truth lives in the per-component status table below.
+**Build Status:** ✅ Compiles; ~50% of planned features implemented; SFTP, port forwarding, theme system, platform keychain integrations not yet shipped.
 
-**🎯 Goal:** Cross-platform desktop SSH client (Windows, Linux, macOS, BSD)  
-**📱 Android Reference:** `../android/` - v1.1.0 complete, 95+ Kotlin files, 22,000+ LOC, F-Droid ready  
-**📊 Status:** **Desktop version matches all Android core features + desktop-specific enhancements**
+**🎯 Goal:** Cross-platform desktop SSH/SFTP client — Windows, Linux, macOS, BSD — feature parity with the Android app where applicable, plus desktop-native conveniences.
 
-**Android App Status (Latest Sync - 2025-12-19):**
-- ✅ 100% Core Features Complete (SSH, SFTP, port forwarding, terminal emulation)
-- ✅ Google Drive + WebDAV Sync with AES-256-GCM encryption
-- ✅ Universal SSH Key Support (OpenSSH, PEM, PKCS#8, PuTTY - all types: RSA, ECDSA, Ed25519, DSA)
-- ✅ SSH Key Generation in-app (RSA 2048/3072/4096, ECDSA P-256/384/521, Ed25519)
-- ✅ Mobile-First UX: Swipe tabs, Volume keys font control, URL detection, Search, Sort (6/14 features - 43%)
-- 🔄 Connection Groups/Folders (Week 1 priority)
-- 🔄 Snippets Library (Week 1 priority)
-- ✅ F-Droid submission ready, 30MB APKs (5 variants)
+**📱 Android Reference:** `../android/` — see `../android/CLAUDE.md` (synced 2026-04-28). Current Android state:
+- 201 Kotlin files, ~61,668 LOC, Room database **v23** (22 forward migrations from v1)
+- 30 Activities, 7 Fragments, 1 ForegroundService
+- Waves 1.X through 9.2 shipped (env vars, agent forwarding, remote file editor in SFTP, chmod editor, SCP fallback, OpenSSH user certs, Telnet, GUI theme editor, Workspaces, command palette / quick switcher / history palette, broadcast input, split view, color tags, PIN lock, background tunnels, 24-bit color, foldable + sw720dp layouts, cluster command live streaming, cloud host import (DigitalOcean / Hetzner / Linode / Vultr), 3-way merge with conflict UI, SSH config export, bulk import, VM serial console via hypervisor API, Mosh native binaries cross-compiled per ABI, ANR watchdog + crash reporter)
+- See `../android/FEATURES_AUDIT.md` for the full have/want/drop matrix vs JuiceSSH/Termius — the desktop should prioritise Tier-1 items there.
 
-**Desktop-Specific Advantages:**
-- ✅ Larger screen real estate (split panes, multiple windows)
-- ✅ Full keyboard shortcuts (Ctrl+T, Ctrl+W, Ctrl+Tab, etc.)
-- ✅ Better file management (drag-and-drop, system file browser integration)
-- ✅ Native performance (no JVM overhead)
-- ✅ Smaller binaries (8-14 MB vs 30 MB APK)
-- ✅ No Google Play Services required
-- ✅ Static binaries (no dependencies)
+**Android App Status (synced 2026-04-28):**
+- ✅ Core SSH (password, public key, keyboard-interactive, OpenSSH user certs)
+- ✅ Universal SSH key support — OpenSSH / PEM / PKCS#8 / PuTTY v2/v3; RSA / ECDSA / Ed25519 / DSA
+- ✅ In-app SSH key generation
+- ✅ **SAF-based universal cloud sync** — works with any storage provider (Google Drive, Dropbox, OneDrive, Nextcloud, local). AES-256-GCM + PBKDF2 (100k iterations). 3-way merge with conflict UI. Per-entity sync toggles. Zero Google services dependency.
+- ✅ **Hypervisor management** — Proxmox VE, XCP-ng, Xen Orchestra (REST + WebSocket live updates), VMware ESXi/vCenter
+- ✅ **VM serial console via hypervisor** (no VM network required — works during OS install / for VMs without network)
+- ✅ Mosh — native cross-compiled `mosh-client` binaries per ABI (Wave 9.2)
+- ✅ X11 forwarding — `X11ForwardingManager` (Wave 7)
+- ✅ Telnet (RFC 854) — Wave 2.3
+- ✅ Workspaces, command palette, quick switcher, history palette, split view, broadcast input, cluster commands
+- ✅ Color tags per host, GUI theme editor, 23 built-in terminal themes
+- ✅ PIN code app lock + biometric, screenshot protection (FLAG_SECURE)
+- ✅ Cloud host import — DigitalOcean / Hetzner / Linode / Vultr (opt-in, tokens in Keystore not DB)
+- ✅ Bulk import / export, SSH config round-trip, encrypted ZIP backup
+- ✅ ANR watchdog + crash reporter (debug builds auto-on, release opt-in)
+
+**Desktop-Specific Advantages (where mobile constraints don't apply):**
+- ✅ **Single static Rust binary** — drop into `$PATH` and run; no JVM, no Android SDK, no runtime install
+- ✅ **Native `~/.ssh/` access** — direct read of the OS user's SSH config, keys, and known_hosts. Platform-specific paths:
+  - Linux/BSD: `~/.ssh/`
+  - macOS: `~/.ssh/`
+  - Windows: `%USERPROFILE%\.ssh\`
+- ✅ **Native crate ecosystem — no JNI / NDK pain.** Implement features in pure Rust where mobile shipped wrappers:
+  - SSH: `russh` / `russh-keys` / `russh-sftp` (pure Rust SSH2)
+  - Terminal: `alacritty_terminal` + `vte` (proven VT/xterm emulation)
+  - SSH config: `ssh2-config` for `~/.ssh/config` parsing
+  - SSH key parsing: `ssh-key` crate (universal — OpenSSH/PEM/PKCS#8/PuTTY)
+  - SSH key types: `ed25519-dalek`, `rsa`, `p256`, `p384`, `p521` for generation
+  - Mosh: native client implementation in Rust (avoid the cross-compile dance the Android app does for `libmosh-client.so`)
+  - X11: `x11rb` (pure Rust X11 protocol)
+  - Keychain: `keyring` crate (Linux Secret Service / macOS Keychain / Windows Credential Manager — single API, no platform code in the app layer)
+  - Clipboard: `arboard` (cross-platform)
+  - Crypto: `aes-gcm`, `pbkdf2`, `argon2`, `ring`
+- ✅ **OS keychain integration** is first-class (mobile has Keystore; desktop has Keychain/Credential Manager/Secret Service)
+- ✅ **Larger screen real estate** — split panes, multiple windows, real keyboard shortcuts
+- ✅ **Native performance** (no JVM overhead, no GC)
+- ✅ **Smaller binaries** (8–14 MB static vs 30 MB APK)
+- ✅ **No Google Play Services anywhere** — already a non-issue on desktop
+- ✅ **Cross-platform** — Linux, macOS, Windows, FreeBSD, OpenBSD, NetBSD; amd64 + arm64 (11 binary variants)
+
+**Mobile-only features that don't carry over to desktop:**
+- ❌ Foreground service notification (desktop has system tray instead)
+- ❌ SAF-based cloud sync (desktop uses filesystem watchers + the user's existing sync app, e.g. Nextcloud client, rclone, syncthing)
+- ❌ Volume keys → font size (use Ctrl+scroll on desktop)
+- ❌ Pinch-zoom (use Ctrl+scroll)
+- ❌ Swipe between tabs (use Ctrl+Tab / mouse)
+- ❌ On-screen keyboard (desktop has a real keyboard)
+- ❌ Foldable book-mode / sw720dp layouts (desktop windows are resizable anyway)
+- ❌ Tasker integration (desktop equivalents would be Linux .desktop files / shell scripts)
 
 ---
 
@@ -820,102 +854,160 @@ make release
 
 ---
 
-## Android App Feature Sync (Latest: 2025-12-19)
+## Android App Feature Sync (Latest: 2026-04-28)
 
-### Current Android App Status (v1.1.0)
-**Production Ready** - 100% core features, F-Droid submission ready
+### Current Android App Status
 
-**Recently Added to Android (Need Desktop Implementation):**
+**Production-track on Android:** baseline v1.0.0 plus Waves 1.X – 9.2 shipped. See `../android/CLAUDE.md` ("What landed since 2026-02-11") and `../android/FEATURES_AUDIT.md` for the parity tracker.
 
-#### 1. **Cloud Sync System** ✅ Android | 🔴 Desktop TODO
-- **Google Drive Sync:** OAuth 2.0 authentication, appDataFolder access
-- **WebDAV Sync:** Nextcloud/ownCloud support for degoogled devices
-- **UnifiedSyncManager:** Automatic backend selection with fallback
-- **Encryption:** AES-256-GCM with PBKDF2 (100k iterations), password-based
-- **3-Way Merge:** Intelligent conflict resolution with field-level detection
-- **Sync Data:** Connections, SSH keys, settings, themes, host keys
-- **Background Sync:** WorkManager with constraints (WiFi-only, battery, charging)
-- **Compression:** GZIP for reduced bandwidth
-- **Device Isolation:** Separate sync files per device (no race conditions)
+**The mobile→desktop port list is grouped by what has a clean Rust crate path vs what needs design work.**
 
-**Desktop Implementation Notes:**
-- Use `ureq` or `reqwest` for HTTP clients
-- OAuth 2.0: `oauth2` crate for Google Drive
-- WebDAV: `reqwest-dav` or custom implementation
-- Encryption: `aes-gcm` + `pbkdf2` crates
-- File storage: Platform-specific (see below)
-  - Linux: `~/.config/tabssh/sync/`
-  - macOS: `~/Library/Application Support/TabSSH/sync/`
-  - Windows: `%APPDATA%\TabSSH\sync\`
+### 🟢 Easy ports — pure Rust crate available
 
-#### 2. **Universal SSH Key Support** ✅ Android | 🔴 Desktop TODO
-- **All Formats:** OpenSSH, PEM (PKCS#1), PKCS#8, PuTTY v2/v3
-- **All Key Types:** RSA (2048/3072/4096), ECDSA (P-256/384/521), Ed25519, DSA
-- **Key Generation:** In-app key pair generation with passphrase protection
-- **Key Management:** Import/export, fingerprint display (SHA-256), encrypted storage
-- **Crypto Library:** BouncyCastle (Android), need Rust equivalent
+#### 1. SSH core + key management — 🔴 Desktop TODO
+- **Universal key parser:** `ssh-key` crate handles OpenSSH, PEM (PKCS#1), PKCS#8, PuTTY v2/v3 — no need to re-implement BouncyCastle's logic.
+- **Key generation:** `ed25519-dalek`, `rsa`, `p256` / `p384` / `p521` cover the algorithms mobile supports.
+- **OpenSSH user certificates** (`*-cert.pub`, mobile Wave 2.2): `ssh-key` supports OpenSSH cert format.
+- **Storage:** OS keychain via `keyring` crate (single API across Linux/macOS/Windows).
 
-**Desktop Implementation Notes:**
-- Use `ssh-key` crate for universal parsing
-- Use `ed25519-dalek`, `rsa`, `p256` for key generation
-- Use `ssh-encoding` for format conversions
-- Store keys in platform keychain (see Security section)
+#### 2. Terminal + protocol features — 🟡 Desktop Partial
+- **Mosh:** mobile ships cross-compiled `libmosh-client.so` per Android ABI. Desktop can use a pure-Rust client implementation, sidestepping the cross-compile workflow entirely.
+- **X11 forwarding:** mobile has `X11ForwardingManager` (Wave 7). Desktop already runs on X11 / Wayland natively — `x11rb` for protocol-level work.
+- **Telnet (Wave 2.3):** trivial in Rust; many crates available.
+- **Terminal renderer:** `alacritty_terminal` already lined up in the dependency list.
 
-#### 3. **Mobile UX Enhancements** ✅ Android | 🟡 Desktop Partial
-- **Swipe Between Tabs:** ViewPager2 for natural mobile navigation
-- **Volume Keys Font Size:** Adjust terminal font with volume buttons
-- **Click URLs in Terminal:** Long-press detection, open in browser
-- **Search Connections:** Real-time filtering by name/host/username
-- **Sort Connections:** 8 sort options (name, host, usage, date)
-- **Frequently Used:** Auto-show top 5 most-used connections
+#### 3. SSH config — 🔴 Desktop TODO
+- **Import:** `ssh2-config` parses `~/.ssh/config` directly. Desktop has the advantage of being able to read the user's existing config without copy-paste.
+- **Round-trip export (Wave 6.1):** mobile has `SSHConfigExporter` — replicate the same generator logic in Rust.
+- **Bulk import (Waves 1, 6.4/6.5):** CSV/JSON via `serde`; PuTTY .ppk lists via `ssh-key`.
 
-**Desktop Adaptations:**
-- **Keyboard Shortcuts:** Ctrl+Tab for tab switching (already implemented)
-- **Mouse Wheel Font Size:** Ctrl+Scroll to adjust font (implement)
-- **Ctrl+Click URLs:** Open URLs in terminal with Ctrl+Click (implement)
-- **Ctrl+F Search:** Standard search dialog (implement)
-- **Right-click Sort Menu:** Context menu for sorting (implement)
-- **Pinned Connections:** Pin favorites to top (implement)
+#### 4. Cloud host import — 🔴 Desktop TODO
+- **Mobile providers:** DigitalOcean, Hetzner, Linode, Vultr (Wave 5.1). Each has a documented JSON REST API.
+- **Desktop:** `reqwest` for HTTP, `serde` for JSON, `keyring` for token storage. Same opt-in-only model — no auto-discovery.
+- **Token isolation:** mobile stores tokens under `cloud_token_${id}` in Keystore (not in the DB). Replicate via `keyring`.
 
-#### 4. **Connection Organization** ✅ Android (In Dev) | 🔴 Desktop TODO
-- **Connection Groups/Folders:** Organize connections by project/client/environment
-- **Snippets Library:** Quick command templates with variables
-- **Proxy/Jump Host:** SSH through bastion servers (ProxyJump)
-- **Identity Abstraction:** Reusable credential sets across connections
+### 🟡 Adapted ports — different mechanism, same intent
 
-**Desktop Implementation:**
-- Groups: Use tree view in sidebar (egui `CollapsingHeader`)
-- Snippets: Bottom panel with searchable command library
-- Jump Host: Implement in `ssh/connection.rs` with chained connections
-- Identities: Separate table in SQLite, reference by ID
+#### 5. Cloud sync — 🔴 Desktop TODO
+- **Mobile:** SAF-based (storage provider apps handle the sync). Three-way merge, conflict UI, AES-256-GCM + PBKDF2 (100k iter).
+- **Desktop:** filesystem watchers + the user's existing sync app (Nextcloud client, syncthing, rclone, OneDrive client, Dropbox client). TabSSH writes encrypted blobs to a folder; the user picks where the folder lives.
+- **Crates:** `notify` for filesystem watch, `aes-gcm` + `pbkdf2` for the same on-wire format mobile uses (so the encrypted blobs are interchangeable across phone and desktop).
 
-#### 5. **Android-Specific (Not Applicable to Desktop)**
+#### 6. UX adaptations
+| Mobile | Desktop equivalent |
+|--------|---------------------|
+| Swipe between tabs | Ctrl+Tab / mouse click on tab |
+| Volume keys → font size | Ctrl+Scroll |
+| Long-press URL → Open/Copy dialog | Ctrl+Click → open in browser |
+| Foreground-service notification | System tray icon |
+| On-screen 1-5 row keyboard | Real keyboard (always available) |
+| Foldable book-mode / sw720dp | Resizable windows + split panes |
+| Pinch-zoom | Ctrl+Scroll |
+
+#### 7. Hypervisor management — 🔴 Desktop TODO
+- **Mobile (Wave 7):** Proxmox VE, XCP-ng, Xen Orchestra (REST + WebSocket live updates), VMware ESXi/vCenter, with VM serial console via hypervisor API for VMs without network.
+- **Desktop:** all the same providers can be reached over HTTP/WebSocket from Rust (`reqwest`, `tokio-tungstenite`). Larger screen makes the VM list / hypervisor dashboard much nicer than on mobile.
+
+#### 8. UI features that benefit from desktop — 🔴 Desktop TODO
+- **Workspaces (Wave 2.5):** named tab groups. Desktop has multi-window, so this maps naturally — each workspace can be its own window.
+- **Command palette (Ctrl+K), Quick switcher (Ctrl+J), History palette (Ctrl+R):** keyboard-centric features designed for desktop ergonomics; mobile already has them.
+- **Split view (Wave 2.8):** mobile has it; desktop is the natural home for multi-pane.
+- **Broadcast input / cluster commands:** great fit on desktop where you can have many panes visible simultaneously.
+- **GUI theme editor (Wave 2.4):** mobile has it; reuse the JSON theme format mobile reads.
+- **Color tags per host (Wave 3.1):** trivial DB column + UI accent.
+
+### 🔴 Mobile-specific — does not map
+
 - Android Widget (home screen)
-- Custom Gestures for tmux/screen
-- Tasker Integration
-- Performance Monitor (system metrics)
+- Custom multi-touch tmux/screen gestures (mobile Wave 4.f)
+- Tasker integration
+- Voice typing affordance
+- ANR watchdog (Android-specific concept; desktop has its own crash reporting via `panic::set_hook`)
+- Android keyboard customisation (1-5 rows of soft keys)
+- SAF document URIs (desktop reads / writes files directly)
+
+### 🟢 Desktop-only wins — no mobile equivalent
+
+- **`~/.ssh/` direct access** — read the user's existing config and keys without import. Major UX win over mobile.
+- **System tray + auto-launch** — connect on login if user wants
+- **Multiple windows** — group hosts however the user prefers
+- **Real CLI mode** — `tabssh user@host` invocation from a shell
+- **Native package distribution** — apt, brew, winget, AUR, pkgsrc, ports
+- **OS-native font rendering** at any size (no Termux dependency)
+- **Real X11 forwarding** that works with desktop X servers, not headless
 
 ---
 
-## Comparison with Android Version
+## Comparison with Android Version (synced 2026-04-28)
 
-| Feature | Android (Kotlin) | Desktop (Rust) | Status |
-|---------|------------------|----------------|--------|
-| **Language** | Kotlin | Rust | ✅ |
-| **UI Framework** | Material Design / Jetpack Compose | egui (pure Rust) | ✅ |
-| **SSH Library** | JSch (Java) | russh (pure Rust) | ✅ |
-| **Terminal** | Custom VT emulation | alacritty_terminal | ✅ |
-| **Database** | Room (SQLite) | rusqlite (SQLite) | ✅ |
-| **Cloud Sync** | Google Drive + WebDAV | 🔴 TODO | 🔴 |
-| **SSH Keys** | Universal parser (all formats) | 🟡 Partial | 🟡 |
-| **Connection Groups** | ✅ Implemented | 🔴 TODO | 🔴 |
-| **Snippets** | ✅ Implemented | 🔴 TODO | 🔴 |
-| **Jump Hosts** | ✅ Implemented | 🔴 TODO | 🔴 |
-| **Binary Size** | 30MB (Android) / 7.4MB (release) | ~10MB (static) | ✅ |
-| **Platforms** | Android only | Win/Linux/Mac/BSD | ✅ |
-| **Dependencies** | Runtime (Java, Android SDK) | None (static binary) | ✅ |
-| **Memory Safety** | GC + some unsafe JNI | Rust compile-time guarantees | ✅ |
+Status legend: ✅ shipped on this platform · 🟡 partial · 🔴 TODO · 🚫 doesn't apply
+
+| Capability | Android | Desktop | Notes |
+|------------|---------|---------|-------|
+| **Language** | Kotlin (JVM) | Rust 2021 | — |
+| **UI Framework** | Material Design 3 / Jetpack Compose | egui (pure Rust) | — |
+| **SSH Library** | JSch (mwiede 2.27.7) | russh (pure Rust) | — |
+| **Terminal** | Termux emulator | alacritty_terminal | — |
+| **Database** | Room (SQLite) v23 | rusqlite (SQLite) | Schema lives in `src/storage/` |
+| **Core SSH** | ✅ password / pubkey / keyboard-int | ✅ password + pubkey | Keyboard-interactive 🔴 |
+| **Universal key parser** | ✅ OpenSSH/PEM/PKCS#8/PuTTY | 🟡 partial | Use `ssh-key` crate |
+| **In-app key generation** | ✅ all algorithms | 🔴 TODO | `ed25519-dalek` + `rsa` + `p256/384/521` |
+| **OpenSSH user certificates** (Wave 2.2) | ✅ | 🔴 TODO | `ssh-key` supports this |
+| **Mosh** | ✅ Wave 9.2 (cross-compiled .so per ABI) | 🔴 TODO | Pure Rust client preferred over wrapping mosh-client |
+| **X11 forwarding** | ✅ Wave 7 (`X11ForwardingManager`) | 🔴 TODO | `x11rb` crate |
+| **Telnet** | ✅ Wave 2.3 | 🔴 TODO | — |
+| **SFTP browser** | ✅ dual-pane | 🔴 TODO | `russh-sftp` crate |
+| **Remote file editor in SFTP** | ✅ Wave 1.7 | 🔴 TODO | — |
+| **chmod editor** | ✅ Wave 1.8 | 🔴 TODO | — |
+| **SCP fallback** | ✅ Wave 1.9 | 🔴 TODO | — |
+| **Port forwarding (-L/-R/-D)** | ✅ + bind-all | 🔴 TODO | `russh` channel API |
+| **Background tunnels** | ✅ Wave 3.3 | 🔴 TODO | — |
+| **ProxyJump cascading** | ✅ | 🔴 TODO | — |
+| **SSH config import** | ✅ | 🔴 TODO | `ssh2-config` crate; desktop reads `~/.ssh/config` directly |
+| **SSH config export round-trip** | ✅ Wave 6.1 | 🔴 TODO | — |
+| **Bulk import (CSV/JSON/PuTTY)** | ✅ Waves 1, 6.4/6.5 | 🔴 TODO | — |
+| **Workspaces (named tab groups)** | ✅ Wave 2.5 | 🔴 TODO | New SQLite table |
+| **Command palette (Ctrl+K)** | ✅ Wave 2.6 | 🔴 TODO | — |
+| **Quick switcher (Ctrl+J)** | ✅ Wave 2.6 | 🔴 TODO | — |
+| **History palette (Ctrl+R)** | ✅ Wave 2.10 | 🔴 TODO | — |
+| **Split view** | ✅ Wave 2.8 | 🔴 TODO | egui has good multi-pane support |
+| **Broadcast input** | ✅ Wave 2.7 | 🔴 TODO | — |
+| **Cluster commands + live streaming** | ✅ Wave 4.e | 🔴 TODO | — |
+| **GUI theme editor** | ✅ Wave 2.4 | 🔴 TODO | — |
+| **23 built-in terminal themes** | ✅ | 🔴 TODO (10+ planned) | Reuse mobile's JSON theme files |
+| **Per-host color tags** | ✅ Wave 3.1 | 🔴 TODO | Single column on the connection table |
+| **PIN code app lock** | ✅ Wave 3.2 | 🔴 TODO | — |
+| **Biometric app lock** | ✅ | 🟡 partial | Touch ID via `keyring`/`security-framework` on macOS, Windows Hello on Windows |
+| **Screenshot protection (FLAG_SECURE)** | ✅ | 🚫 | Desktop OSes don't expose an equivalent universally |
+| **Hypervisor management** | ✅ Proxmox / XCP-ng / Xen Orchestra / VMware (Wave 7) | 🔴 TODO | All HTTP/WS — easy port |
+| **VM serial console via hypervisor** | ✅ Wave 7 | 🔴 TODO | — |
+| **Cloud host import** | ✅ DO/Hetzner/Linode/Vultr (Wave 5.1) | 🔴 TODO | `reqwest` + `keyring` |
+| **Cloud sync** | ✅ SAF + AES-256-GCM/PBKDF2 + 3-way merge | 🔴 TODO | Filesystem watch + user's sync app |
+| **Snippets library + variable prompts** | ✅ | 🔴 TODO | — |
+| **Identity abstraction** | ✅ | 🔴 TODO | — |
+| **Connection groups/folders** | ✅ | 🔴 TODO | — |
+| **Encrypted ZIP backup/restore** | ✅ | 🔴 TODO | — |
+| **ANR watchdog + crash reporter** | ✅ debug auto-on, release opt-in | 🟡 partial | `panic::set_hook` for crashes; ANR concept doesn't apply, but "UI thread frozen" detection does |
+| **Find/search in scrollback** | ✅ Wave 1 | 🔴 TODO | — |
+| **24-bit true color** | ✅ Wave 4.a | 🔴 TODO | `alacritty_terminal` supports it |
+| **Tasker integration** | ✅ | 🚫 | Desktop equivalent is shell scripting / `.desktop` actions |
+| **Foldable + tablet-sw720dp layouts** | ✅ Waves 4.b/4.c | 🚫 | Desktop windows are resizable anyway |
+| **Custom keyboard 1-5 rows** | ✅ | 🚫 | Real keyboard always available |
+| **Volume keys → font size** | ✅ | 🚫 | Use Ctrl+Scroll instead |
+| **Pinch-zoom font size** | ✅ | 🚫 | Use Ctrl+Scroll instead |
+| **Swipe between tabs** | ✅ | 🚫 | Use Ctrl+Tab |
+| **URL detection long-press** | ✅ | 🔴 TODO (Ctrl+Click instead) | — |
+| **Direct ~/.ssh/ access** | 🚫 (Android sandbox) | 🆕 desktop-only | Major UX win |
+| **System tray** | 🚫 (Android equivalent: foreground-service notification) | 🔴 TODO | `tray-icon` crate |
+| **CLI mode (`tabssh user@host` from shell)** | 🚫 | 🆕 desktop-only | — |
+| **Native package distribution** | (F-Droid/Play planned) | 🔴 TODO | apt, brew, winget, AUR, pkgsrc, pkg, ports |
+| **Binary Size** | 30 MB APK / ~7.4 MB after R8 | ~10 MB (static, stripped) | ✅ |
+| **Platforms** | Android only | Linux / macOS / Windows / FreeBSD / OpenBSD / NetBSD (amd64+arm64, 11 variants) | ✅ |
+| **Runtime dependencies** | Java + Android SDK | None (statically linked) | ✅ |
+| **Memory safety** | GC + JNI unsafe surface | Rust compile-time guarantees | ✅ |
 | **Performance** | JVM overhead | Native, no GC | ✅ |
+
+For the full mobile feature catalog see `../android/FEATURES_AUDIT.md` — the Tier-1/Tier-2 lists there are also the desktop's natural priority order.
 
 ---
 
@@ -1294,119 +1386,81 @@ releases/v0.1.0/
 
 ---
 
-## Android App Feature Reference
+## Android App Feature Reference (synced 2026-04-28)
 
-**Location:** `../android/` (Reference implementation - 100% complete)
-
-### Complete Feature Set in Android
-
-The Android app serves as the reference for all features to implement in Desktop version.
-
-#### Core SSH Features (Android)
-```
-✅ Browser-style tabs - Multiple concurrent sessions
-✅ SSH authentication - Password, RSA, ECDSA, Ed25519, DSA, keyboard-interactive
-✅ Universal SSH key support - OpenSSH, PEM, PKCS#8, PuTTY formats
-✅ SSH key generation - In-app key creation with all algorithms
-✅ Full VT100/ANSI terminal - 256 colors + true color
-✅ SFTP browser - Complete file manager with upload/download progress
-✅ Port forwarding - Local and remote port forwarding
-✅ Dynamic SOCKS proxy - SOCKS5 proxy support
-✅ X11 forwarding - Run graphical applications remotely
-✅ SSH config import - Parse and import ~/.ssh/config files
-✅ Jump host / ProxyJump - Multi-hop SSH connections
-✅ Clipboard integration - Copy/paste with proper encoding
-✅ Custom keyboard - SSH-optimized on-screen keyboard
-```
-
-#### Security Features (Android)
-```
-✅ Hardware-backed encryption - Android Keystore integration
-✅ Biometric authentication - Fingerprint and face unlock
-✅ AES-256 password encryption - No plaintext storage
-✅ Host key verification - SHA256 fingerprints with MITM detection
-✅ Screenshot protection - Prevent sensitive data leaks
-✅ Auto-lock with timeout - Configurable security timeout
-✅ Certificate pinning - Enhanced connection security
-✅ Session encryption - All data encrypted in transit
-```
-
-#### UI/UX Features (Android)
-```
-✅ Material Design 3 - Modern, beautiful interface
-✅ 7+ built-in themes:
-   - Dracula
-   - Solarized (Light & Dark)
-   - Nord
-   - Monokai
-   - One Dark
-   - Tokyo Night
-   - Gruvbox
-✅ Custom theme import/export - JSON theme definitions
-✅ Custom fonts - Cascadia Code, Fira Code, JetBrains Mono, Source Code Pro
-✅ Visual indicators - Connection state, unread output, usage stats
-✅ Tab management - Drag-to-reorder, Ctrl+Tab switching, persistent sessions
-✅ Connection statistics - Track usage and connection history
-```
-
-#### Advanced Features (Android)
-```
-✅ Mosh protocol support - Mobile shell for unstable connections
-✅ Backup & restore - Export/import all settings and connections
-✅ Session persistence - Resume sessions after app restart
-✅ Cloud sync - Google Drive sync with WebDAV fallback
-✅ Connection tracking - Usage statistics ("Connected X times")
-✅ Frequently used section - Quick access to common connections
-```
-
-#### Accessibility & Inclusivity (Android)
-```
-✅ TalkBack support - Full screen reader compatibility
-✅ High contrast modes - Enhanced visibility for low vision
-✅ Large text support - Adjustable font sizes (8-32pt)
-✅ Keyboard navigation - Full keyboard accessibility
-✅ Multi-language - English, Spanish, French, German, Chinese, Japanese
-```
-
-#### Privacy & Open Source (Android)
-```
-✅ Zero trackers - No analytics, no ads, complete privacy
-✅ No telemetry - No data collection whatsoever
-✅ Open source - MIT licensed, fully auditable code
-✅ Forever free - No premium features, no in-app purchases
-```
+**Location:** `../android/` — see `../android/CLAUDE.md` and `../android/FEATURES_AUDIT.md`.
 
 ### Implementation Priority for Desktop
 
-Based on Android feature set:
+Aligned with `../android/FEATURES_AUDIT.md` — the Android-side audit categorises every feature as 🔥 Tier 1 (finish-the-half-done + quick wins), 🚀 Tier 2 (meaningful new capabilities), 🎯 Tier 3 (polish), 🧊 Tier 4 (speculative). The same priority ordering makes sense for desktop. The **comparison table above** is the authoritative status; this section just orders the work.
 
-**HIGH Priority (Phase 3):**
-- SFTP browser with file operations
-- Port forwarding (local, remote, dynamic)
-- SSH config parser
-- Jump host support
-- Complete host key verification with DB storage
+#### 🔥 Phase 3 — Tier 1 essentials (ship to reach SSH-client viability)
+- Complete SSH (keyboard-interactive auth, agent forwarding) — `russh` already supports
+- SFTP browser with the dual-pane layout mobile has — `russh-sftp`
+- In-SFTP file editor (mobile Wave 1.7) — open file → edit → save back
+- chmod editor in SFTP (Wave 1.8)
+- SCP fallback (Wave 1.9)
+- Port forwarding: -L / -R / -D (SOCKS) — `russh` channel API
+- Background tunnels (Wave 3.3)
+- ProxyJump cascading
+- SSH config import — **read `~/.ssh/config` directly** via `ssh2-config` (desktop-native advantage)
+- SSH config round-trip export (Wave 6.1)
+- Bulk import: CSV / JSON / PuTTY (Waves 1, 6.4/6.5)
+- Universal SSH key parser via `ssh-key` crate (all formats from mobile)
+- In-app key generation (RSA, ECDSA, Ed25519)
+- OpenSSH user certificate auth (Wave 2.2)
+- Per-connection env vars (Wave 1.2)
+- Find/search in scrollback (Wave 1)
+- Reconnect button on disconnected tab
 
-**MEDIUM Priority (Phase 4):**
-- Theme system (7+ themes matching Android)
-- Theme import/export (JSON)
-- Custom fonts support
-- Settings persistence
-- Connection statistics
-- Session persistence
+#### 🚀 Phase 4 — Tier 2 capabilities (where desktop shines)
+- Workspaces (named tab groups, Wave 2.5) — natural fit for multi-window
+- Command palette Ctrl+K, Quick switcher Ctrl+J, History palette Ctrl+R (Waves 2.6, 2.10)
+- Split view (Wave 2.8) — multi-pane terminals, big desktop win
+- Broadcast input (Wave 2.7) + Cluster commands with live streaming (Wave 4.e)
+- GUI theme editor (Wave 2.4) — reuse mobile's JSON theme format
+- 23 built-in themes (already enumerated in mobile's `BuiltInThemes.kt`)
+- Per-host color tags (Wave 3.1)
+- Snippets library with prompt-style variables `{?password}` etc.
+- Identity abstraction (reusable credentials)
+- Connection groups/folders
+- Hypervisor management — Proxmox / XCP-ng / Xen Orchestra (REST + WebSocket) / VMware (Wave 7)
+- VM serial console via hypervisor API (no VM network needed)
+- Cloud host import — DigitalOcean / Hetzner / Linode / Vultr (Wave 5.1)
+- 24-bit true-color rendering (Wave 4.a)
+- Telnet protocol (Wave 2.3)
 
-**MEDIUM Priority (Phase 5):**
-- Platform keychain integration
-- Cross-platform builds
-- Backup & restore
-- Platform-specific installers
+#### 🎯 Phase 5 — Tier 3 polish + platform integration
+- Theme JSON import/export
+- Encrypted ZIP backup/restore
+- Cloud sync via filesystem watch + user's sync app (encrypted blobs interchangeable with mobile)
+- Platform keychain integrations (`keyring` crate covers Linux/macOS/Windows in one API)
+- System tray (`tray-icon`) + auto-launch on login
+- CLI mode: `tabssh user@host` invocation from shell
+- Native installers: `.deb`, `.rpm`, AUR `PKGBUILD`, AppImage, `.dmg`, Homebrew formula, MSI, WinGet manifest, Scoop, FreeBSD `pkg`/ports, OpenBSD packages, NetBSD `pkgsrc`
+- PIN code app lock (Wave 3.2 mobile equivalent)
+- Crash reporter via `panic::set_hook`
+- Settings persistence (mostly stub'd today)
+- Connection history view (Wave 3.5)
+- What's-new / changelog screen on update (Wave 3.6)
 
-**LOW Priority (Later):**
-- Mosh protocol support
-- X11 forwarding
-- Cloud sync
-- Multi-language support
-- Accessibility features
+#### 🧊 Phase 6 — Tier 4 / situational
+- Foldable layout — N/A on desktop
+- Voice typing — N/A on desktop
+- Multi-language support (mirror mobile's en/es/fr/de strings)
+- Accessibility audits (screen reader compatibility)
+- Performance monitor with charts (mobile uses MPAndroidChart; Rust equivalent: `egui_plot`)
+
+### What desktop should NOT bother porting
+
+- Foreground service notification (use system tray)
+- SAF document URIs (read files directly)
+- On-screen keyboard customisation
+- Volume key bindings, pinch-zoom (use Ctrl+Scroll)
+- Swipe gestures (use Ctrl+Tab + mouse)
+- ANR watchdog (use panic-handler crash reporting; UI-thread freeze detection is optional)
+- Tasker integration (use shell scripts / .desktop actions)
+- Android widget
 
 ---
 
