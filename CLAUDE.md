@@ -1,16 +1,24 @@
 # TabSSH Desktop - Claude Project Tracker
 
-**Last Updated:** 2026-04-28
+**Last Updated:** 2026-05-01
 **Version:** 0.1.0 (early development — not yet released)
-**Status:** 🚧 **Phase 2 in progress** — see [Current Implementation Status](#-current-implementation-status). The "100% complete" framing in earlier revisions of this file was aspirational; the truth lives in the per-component status table below.
-**Build Status:** ✅ Compiles; ~50% of planned features implemented; SFTP, port forwarding, theme system, platform keychain integrations not yet shipped.
+**Status:** 🚧 **Phase 2 in progress** — see [Current Implementation Status](#-current-implementation-status). The "100% complete" framing in `STATUS.md` / `PROGRESS_REPORT.md` / `TODO.AI.md` (Dec 2025) was aspirational; those docs are slated for deletion. This file is the source of truth.
+**Build Status:** ❌ **Does not compile.** Verified 2026-05-01 via `docker run --rm -v $(pwd):/workspace -w /workspace tabssh-builder cargo check`: **50 errors + 17 warnings**. Concentration:
+- `src/sftp/client.rs` — 42 errors, almost entirely russh-sftp 2.0 API drift (`From<&Cow<'_, str>>` not implemented, `setstat` no longer on `SftpSession`, method-arity mismatches on read/write methods)
+- `src/ssh/forwarding.rs` — 5 errors
+- `src/sftp/browser.rs`, `src/terminal/emulator.rs` — 3 each (Copy-trait + unused-variable warnings the latter)
+- Misc 1–2 each in ssh/connection, ssh/config_parser, ssh/active_session, sftp/transfer, sftp/operations, ui/components, ui/keyboard, ui/screens/{settings,sftp_browser_ui}
+- Down from the 61-error count COMPILATION_STATUS.md captured 2025-12-20 — the russh handler-lifetime issues are gone; russh-sftp shape-mismatch is now the dominant blocker.
 
 **🎯 Goal:** Cross-platform desktop SSH/SFTP client — Windows, Linux, macOS, BSD — feature parity with the Android app where applicable, plus desktop-native conveniences.
 
 **📱 Android Reference:** `../android/` — see `../android/CLAUDE.md` (synced 2026-04-28). Current Android state:
-- 201 Kotlin files, ~61,668 LOC, Room database **v23** (22 forward migrations from v1)
-- 30 Activities, 7 Fragments, 1 ForegroundService
-- Waves 1.X through 9.2 shipped (env vars, agent forwarding, remote file editor in SFTP, chmod editor, SCP fallback, OpenSSH user certs, Telnet, GUI theme editor, Workspaces, command palette / quick switcher / history palette, broadcast input, split view, color tags, PIN lock, background tunnels, 24-bit color, foldable + sw720dp layouts, cluster command live streaming, cloud host import (DigitalOcean / Hetzner / Linode / Vultr), 3-way merge with conflict UI, SSH config export, bulk import, VM serial console via hypervisor API, Mosh native binaries cross-compiled per ABI, ANR watchdog + crash reporter)
+- ~215 Kotlin files, ~65,534 LOC, Room database **v26** (25 forward migrations from v1)
+- 23 Activities, 7 Fragments, 1 ForegroundService
+- Waves 1.X through 9.2 + Issue #163–#175 shipped:
+  - Wave roll-up: env vars, agent forwarding, remote file editor in SFTP, chmod editor, SCP fallback, OpenSSH user certs, Telnet, GUI theme editor, Workspaces, command palette / quick switcher / history palette, broadcast input, split view, color tags, PIN lock, background tunnels, 24-bit color, foldable + sw720dp layouts, cluster command live streaming, cloud host import (DigitalOcean / Hetzner / Linode / Vultr), 3-way merge with conflict UI, SSH config export, bulk import, VM serial console via hypervisor API, Mosh native binaries cross-compiled per ABI, ANR watchdog + crash reporter
+  - Post-audit (2026-04-28+): multi-tab same-host independent shells (#163), Active Sessions strip (#165), edge-swipe tab switching (#168 — mobile-only), tmux/screen/zellij auto-launch + post-connect script (#170), always-on keepalive (#166 — removed per-profile toggle), centralised error dialogs with Copy (#167), recordable macros DB v25→v26 (#173), hardware-kbd modifier-aware nav keys + AltGr (#171), cold-start ANR fixes (#158), cold-start commit-id marker (#164), repo cleanup (#160), on-screen kbd ergonomics (#161, #162), QR pairing (mobile shipped 2026-04-28 — desktop side WIP, see §QR pairing)
+- DB schema additions vs prior sync: v24 `connections.remote_command` (Issue #37); v25 `connections.ip_mode` (auto/ipv4/ipv6, Issue #6); v26 `macros` table (Issue #173 raw byte sequences, distinct from snippets).
 - See `../android/FEATURES_AUDIT.md` for the full have/want/drop matrix vs JuiceSSH/Termius — the desktop should prioritise Tier-1 items there.
 
 **Android App Status (synced 2026-04-28):**
@@ -948,7 +956,7 @@ Status legend: ✅ shipped on this platform · 🟡 partial · 🔴 TODO · 🚫
 | **UI Framework** | Material Design 3 / Jetpack Compose | egui (pure Rust) | — |
 | **SSH Library** | JSch (mwiede 2.27.7) | russh (pure Rust) | — |
 | **Terminal** | Termux emulator | alacritty_terminal | — |
-| **Database** | Room (SQLite) v23 | rusqlite (SQLite) | Schema lives in `src/storage/` |
+| **Database** | Room (SQLite) v26 | rusqlite (SQLite) | Schema lives in `src/storage/`. Mobile schema is the spec; desktop should track it via numbered migrations. Latest mobile additions: v24 `connections.remote_command`, v25 `connections.ip_mode`, v26 `macros` table |
 | **Core SSH** | ✅ password / pubkey / keyboard-int | ✅ password + pubkey | Keyboard-interactive 🔴 |
 | **Universal key parser** | ✅ OpenSSH/PEM/PKCS#8/PuTTY | 🟡 partial | Use `ssh-key` crate |
 | **In-app key generation** | ✅ all algorithms | 🔴 TODO | `ed25519-dalek` + `rsa` + `p256/384/521` |
@@ -990,6 +998,15 @@ Status legend: ✅ shipped on this platform · 🟡 partial · 🔴 TODO · 🚫
 | **ANR watchdog + crash reporter** | ✅ debug auto-on, release opt-in | 🟡 partial | `panic::set_hook` for crashes; ANR concept doesn't apply, but "UI thread frozen" detection does |
 | **Find/search in scrollback** | ✅ Wave 1 | 🔴 TODO | — |
 | **24-bit true color** | ✅ Wave 4.a | 🔴 TODO | `alacritty_terminal` supports it |
+| **Multi-tab same-host independent shells** | ✅ Issue #163 | 🔴 TODO | Per-tab `ChannelShell`/`ChannelExec` on a single SSH session; sibling tabs survive when one shell exits. `russh::Channel` per tab |
+| **Active Sessions strip** | ✅ Issue #165 | 🔴 TODO | Top-of-window list of running tabs with terminal title (OSC 0/2) + connection-state dot; tap to focus |
+| **Tmux/Screen/Zellij auto-launch + post-connect script** | ✅ Issue #170 | 🔴 TODO | `profile.multiplexerMode` (`AUTO_ATTACH`/`CREATE_NEW`) + `profile.postConnectScript` — both defined but unwired in old desktop schema |
+| **Always-on keepalive** | ✅ Issue #166 | 🔴 TODO | 60s server-alive interval, count-max 3, no per-profile toggle. Apply to russh session config |
+| **Centralised error dialogs with Copy** | ✅ Issue #167 | 🔴 TODO | All `showError`/"Failed" routed through `DialogUtils.showErrorDialog`; clipboard via `arboard` |
+| **Recordable macros** | ✅ Issue #173 (DB v26) | 🔴 TODO | Capture raw byte sequences (escape codes, paste payloads, modifier-composed Ctrl/Alt); replay verbatim. Distinct from snippets |
+| **Hardware-kbd modifier-aware nav keys + AltGr** | ✅ Issue #171 | 🔴 TODO | xterm-style `\e[1;<mod><letter>` for Shift/Ctrl/Alt + arrows / HOME / END / PG family. AltGr distinguished from real Alt |
+| **Cold-start commit-id marker** | ✅ Issue #164 | 🔴 TODO | Log `## binary built from: <commit> ##` once per commit-id change. Resolves at build time via `build.rs`, falls back to `release.txt` |
+| **QR pairing (desktop → mobile)** | ✅ mobile shipped 2026-04-28 | 🔴 TODO | **Desktop is the sender** — see §QR pairing below for the full Rust TODO checklist (qrcodegen + ciborium + argon2 + aes-gcm) |
 | **Tasker integration** | ✅ | 🚫 | Desktop equivalent is shell scripting / `.desktop` actions |
 | **Foldable + tablet-sw720dp layouts** | ✅ Waves 4.b/4.c | 🚫 | Desktop windows are resizable anyway |
 | **Custom keyboard 1-5 rows** | ✅ | 🚫 | Real keyboard always available |
@@ -1008,6 +1025,52 @@ Status legend: ✅ shipped on this platform · 🟡 partial · 🔴 TODO · 🚫
 | **Performance** | JVM overhead | Native, no GC | ✅ |
 
 For the full mobile feature catalog see `../android/FEATURES_AUDIT.md` — the Tier-1/Tier-2 lists there are also the desktop's natural priority order.
+
+---
+
+## QR pairing (desktop → mobile) {#qr-pairing-desktop--mobile}
+
+**Status:** Mobile side shipped 2026-04-28. Desktop is the **sender** — this checklist is the canonical TODO. Wire format is fixed (mobile won't change).
+
+**Goal:** Add an existing TabSSH connection from desktop to a phone without retyping. Desktop renders an encrypted QR + 6-digit code; phone scans, enters the code, imports.
+
+**Wire format (mobile is the spec, desktop must conform):**
+
+`QrPayload`: CBOR `{ version: u8 = 1, salt: [u8;16], nonce: [u8;12], ciphertext: bytes }` → base64-encoded → rendered as QR in byte mode (ZXing's `ScanContract` returns `String`, so base64 is required for clean round-trip).
+
+`ciphertext` is `AES-256-GCM(key, nonce, CBOR(PairingPayload))` where `key = Argon2id(password=6-digit-code, salt=salt, m=64MiB, t=3, p=1)`.
+
+`PairingPayload`:
+```
+{
+  version: u8 = 1,
+  expires_at: u64,                  // unix seconds, ~60s after generation
+  device_label: Option<String>,     // "Alice's Linux desktop"
+  connections: [ConnectionProfile], // see §18.4 of ../android/AI.md
+  groups: [Group],                  // optional, only those referenced
+  identities: [Identity],           // optional, only those referenced
+}
+```
+
+**No password, no private key.** Only public-key fingerprint + comment if the user wants to ride a key. Phone generates its own keypair locally if it wants matching auth.
+
+**Capacity ceiling:** QR Code byte mode at ECC-L = 2,953 bytes. Cap v1 at 10 connections per QR (~2,800 bytes with RSA-4096 public keys).
+
+**Threat model:** assume the QR is photographed by anyone with line-of-sight. The 6-digit code is the second factor; Argon2id m=64MiB t=3 makes brute-forcing 1M codes cost ~12 days/core, far longer than the 60s TTL.
+
+**Rust desktop TODO:**
+- [ ] Add deps: `qrcodegen`, `ciborium`, `argon2`, `aes-gcm`, `rand`, `base64` (note: BouncyCastle's Argon2id parameters m=64 MiB / t=3 / p=1 must match `argon2::Params::new(64*1024, 3, 1, ...)` exactly — bytes-vs-MiB semantics matter)
+- [ ] `src/pairing/payload.rs` — `PairingPayload`, `ConnectionProfile` (subset, no secrets), serde encode
+- [ ] `src/pairing/encrypt.rs` — generate code/salt/nonce; Argon2id; AES-GCM encrypt; serialise QrPayload
+- [ ] `src/pairing/qr.rs` — render `QrPayload` (base64) → QR bitmap via `qrcodegen`
+- [ ] `src/ui/pairing_dialog.rs` — egui state machine + QR display + countdown (`[Idle] → [Selecting] → [Generating] → [Active] → [Expired]`)
+- [ ] Wire menu entry: File → Pair Phone…
+- [ ] Tests: round-trip encrypt/decrypt with known test vectors, **commit them — mobile reuses the same vectors**
+- [ ] After desktop ships: run mobile-side ImportFromQrActivity against our QRs to verify wire compatibility
+
+**Why ZXing on mobile (not ML Kit):** ML Kit Barcode pulls in `com.google.android.gms:play-services-base` even bundled. TabSSH targets de-Googled ROMs → no Google Play Services dep allowed. Doesn't affect us on desktop, but constrains the Android side.
+
+Reference: `../android/AI.md` §18.
 
 ---
 
