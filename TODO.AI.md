@@ -1,705 +1,169 @@
-# TabSSH Desktop - AI Implementation Todo List
+# TabSSH Desktop — Work List
 
-**Last Updated:** 2025-12-19  
-**Current Status:** 100% Core Complete → Adding Android v1.1.0 Sync Features  
-**Goal:** Feature parity with Android app + desktop-specific enhancements  
-**Android Version:** v1.1.0 (100% complete, mobile UX enhancements in progress)
+**Last verified:** 2026-05-01
+**Build status:** ❌ Does not compile (50 errors via `cargo check` in `tabssh-builder` docker image)
+**Feature parity vs android:** see the "Comparison with Android Version" matrix in the project tracker — most rows are 🔴 TODO
 
----
-
-## Summary
-
-TabSSH Desktop has achieved **100% core feature completion** matching the Android app's base functionality. Now syncing **new Android v1.1.0 features** to desktop:
-
-**Android v1.1.0 New Features (Dec 2025):**
-- ✅ Google Drive + WebDAV Sync with AES-256-GCM encryption
-- ✅ Universal SSH Key Support (OpenSSH, PEM, PKCS#8, PuTTY - all types)
-- ✅ SSH Key Generation (RSA, ECDSA, Ed25519, DSA with passphrase)
-- ✅ Mobile UX: Swipe tabs, Volume keys, URL detection, Search, Sort (6/14 - 43%)
-- 🔄 Connection Groups/Folders (Week 1 priority)
-- 🔄 Snippets Library (Week 1 priority)
-- 🔄 Proxy/Jump Host Support (Week 2 priority)
-
-**Desktop Adaptation Strategy:**
-- Sync features are desktop-appropriate (Google Drive, WebDAV, Nextcloud, file-based)
-- Mobile gestures → Desktop keyboard shortcuts + mouse actions
-- Touch optimizations → Desktop UI optimizations (menus, toolbars, shortcuts)
+This file is the live work list. It supersedes the December 2025 `STATUS.md` / `PROGRESS_REPORT.md` / `COMPILATION_STATUS.md` snapshots, which falsely claimed 75–100% completion when the project did not compile.
 
 ---
 
-## 📊 Progress Overview
+## Phase 0 — get the build green (blocker)
 
-```
-Phase 1-6: Core Features          ████████████████████ 100% ✅ COMPLETE
-Phase 7: Cloud Sync               ░░░░░░░░░░░░░░░░░░░░   0% 🔴 NOT STARTED
-Phase 8: Advanced Key Management  ░░░░░░░░░░░░░░░░░░░░   0% 🔴 NOT STARTED
-Phase 9: Organization Features    ░░░░░░░░░░░░░░░░░░░░   0% 🔴 NOT STARTED
-Phase 10: Productivity Tools      ░░░░░░░░░░░░░░░░░░░░   0% 🔴 NOT STARTED
+50 errors as of 2026-05-01. Distribution:
 
-Overall: ████████████░░░░░░░░  65% → 100% (Target)
-```
+| File | Errors | Cause |
+|------|-------:|-------|
+| `src/sftp/client.rs` | 42 | russh-sftp 2.0 API drift — `From<&Cow<'_, str>>` not implemented for `String`, `setstat` removed from `SftpSession`, method-arity mismatches on `read`/`write`/`stat` |
+| `src/ssh/forwarding.rs` | 5 | (audit pending) |
+| `src/sftp/browser.rs` | 3 | `FileType` doesn't impl `Copy` — moves out of shared refs |
+| `src/terminal/emulator.rs` | 3 | (warnings: unused vars; check for real errors too) |
+| `src/ssh/connection.rs` | 2 | (audit pending) |
+| `src/ssh/config_parser.rs` | 2 | (audit pending) |
+| `src/sftp/transfer.rs` | 2 | (audit pending) |
+| `src/sftp/operations.rs` | 2 | (audit pending) |
+| `src/ui/screens/settings_screen.rs` | 2 | (audit pending) |
+| `src/ssh/active_session.rs` | 1 | (audit pending) |
+| `src/ui/keyboard.rs` | 1 | (audit pending) |
+| `src/ui/components.rs` | 1 | (audit pending) |
+| `src/ui/screens/sftp_browser_ui.rs` | 1 | (audit pending) |
 
----
+**Fix order:**
+1. SFTP client (42 errors) — read russh-sftp 2.0 docs for `SftpSession`. Likely needs `.read_dir()`/`.open()`/`.create()` returning futures of `russh_sftp::client::fs::File`, with `Cow<str>` → `String` via `.into_owned()` not `From`.
+2. `FileType` → derive `Copy` + `Clone` (it's an enum of unit variants, no reason it isn't already).
+3. SSH forwarding/connection/config_parser — likely API drift in russh 0.40 channel/handler API.
+4. Misc UI errors — typically egui 0.25 method renames.
 
-## ✅ COMPLETED PHASES (100%)
-
-### Phase 1: Foundation ✅
-- ✅ Project structure (58 Rust modules, 6,288 LOC)
-- ✅ Cargo.toml with all dependencies
-- ✅ Docker multi-arch build (Alpine + Rust, amd64 + arm64)
-- ✅ Makefile (build/release/docker/test/clean)
-- ✅ SQLite database schema v1
-- ✅ Configuration management (TOML)
-- ✅ Basic SSH connection (russh)
-- ✅ egui UI framework integration
-
-### Phase 2: Core SSH Features ✅
-- ✅ Multiple SSH connections (tab-based)
-- ✅ SSH2 protocol (russh)
-- ✅ Authentication: Password, Public Key, Keyboard-Interactive
-- ✅ Host key verification (SHA256 fingerprints)
-- ✅ Host key persistence (MITM detection)
-- ✅ Session persistence/reconnection
-- ✅ Keep-alive + auto-reconnect
-
-### Phase 3: Advanced SSH ✅
-- ✅ SFTP file browser (full implementation)
-- ✅ File transfer (upload/download with progress)
-- ✅ Port forwarding (local, remote, dynamic SOCKS)
-- ✅ SSH agent integration
-- ✅ SSH config file parser (~/.ssh/config)
-- ✅ Jump host / ProxyJump basic support
-
-### Phase 4: UI & Terminal ✅
-- ✅ Full VT100/VT220/xterm emulation
-- ✅ 256-color + 24-bit true color
-- ✅ UTF-8 support
-- ✅ Scrollback buffer (10,000 lines)
-- ✅ Text selection + clipboard
-- ✅ Mouse support (SGR)
-- ✅ Browser-style tabs (Ctrl+T, Ctrl+W, Ctrl+Tab)
-- ✅ 10+ built-in themes (Dracula, Solarized, Nord, etc.)
-- ✅ Font customization
-- ✅ Connection manager UI
-
-### Phase 5: Platform Integration ✅
-- ✅ macOS Keychain integration
-- ✅ Windows Credential Manager
-- ✅ Linux Secret Service
-- ✅ BSD file-based encryption
-- ✅ System tray integration
-- ✅ Platform-specific installers
-
-### Phase 6: Testing & Build ✅
-- ✅ 15 comprehensive test suites
-- ✅ Cross-platform builds (11 binaries)
-- ✅ Docker multi-arch buildx
-- ✅ GitHub Actions CI/CD
-- ✅ Release automation
-- ✅ Static binaries (8-14 MB)
-
-### Phase 2: Core Features (100%) ✅
-- ✅ Full SSH connection implementation
-- ✅ Multiple authentication methods (password, key, keyboard-interactive)
-- ✅ Host key verification with database
-- ✅ MITM attack detection
-- ✅ Known hosts management
-- ✅ Terminal emulation integration (VT100/xterm)
-- ✅ Session manager
-- ✅ Connection profiles
-- ✅ Database persistence
-- ✅ Configuration file management
-
-### Phase 3: Advanced SSH (100%) ✅
-- ✅ **SFTP Client Implementation**
-  - ✅ Connect/disconnect SFTP sessions
-  - ✅ List directory contents
-  - ✅ Download files with progress
-  - ✅ Upload files with progress
-  - ✅ Create directories
-  - ✅ Delete files/directories
-  - ✅ Rename files/directories
-  - ✅ Get file stats
-  - ✅ Change permissions (chmod)
-- ✅ **Transfer Manager**
-  - ✅ Upload/download queue
-  - ✅ Progress tracking
-  - ✅ Status management
-  - ✅ Cancel transfers
-  - ✅ Clear completed transfers
-- ✅ **Port Forwarding**
-  - ✅ Local port forwarding (ssh -L)
-  - ✅ Remote port forwarding (ssh -R)
-  - ✅ Dynamic SOCKS proxy (ssh -D)
-  - ✅ SOCKS5 implementation
-  - ✅ Multiple forwards per connection
-  - ✅ ForwardingManager
-- ✅ **SSH Config Parser**
-  - ✅ Parse ~/.ssh/config
-  - ✅ Host patterns
-  - ✅ ProxyJump support
-  - ✅ IdentityFile parsing
-  - ✅ Port forwarding config
-  - ✅ Compression settings
-
-### Phase 4: UI Polish (100%) ✅
-- ✅ **SFTP Browser UI**
-  - ✅ File list widget implementation
-  - ✅ Directory navigation UI
-  - ✅ Progress bars for transfers
-  - ✅ Context menu (right-click)
-  - ✅ Keyboard shortcuts (F5, Del, F2, etc.)
-  - ✅ Transfer queue panel
-  - ✅ Status indicators
-  - ✅ Error dialogs
-- ✅ **Port Forwarding UI**
-  - ✅ List active forwards
-  - ✅ Add/edit forward dialog
-  - ✅ Remove forward button
-  - ✅ Status indicators (active/inactive)
-  - ✅ Port availability check
-  - ✅ Connection count display
-- ✅ **Theme System**
-  - ✅ Theme struct defined
-  - ✅ Database storage
-  - ✅ Theme selection UI
-  - ✅ Live theme switching
-  - ✅ Built-in themes (10+ themes)
-- ✅ **Settings Dialog**
-  - ✅ Terminal settings (font, size, scrollback)
-  - ✅ SSH settings (timeout, keepalive, compression)
-  - ✅ Theme selection
-  - ✅ Keyboard shortcuts configuration
-  - ✅ Security settings
-  - ✅ SFTP settings
-  - ✅ Port forwarding defaults
-- ✅ **Keyboard Shortcuts**
-  - ✅ Ctrl+T - New tab
-  - ✅ Ctrl+W - Close tab
-  - ✅ Ctrl+Tab - Next tab
-  - ✅ Ctrl+Shift+Tab - Previous tab
-  - ✅ Ctrl+1-9 - Jump to tab
-  - ✅ Ctrl+F - Search in terminal
-  - ✅ Ctrl+Shift+C - Copy
-  - ✅ Ctrl+Shift+V - Paste
-  - ✅ F5 - SFTP refresh
-  - ✅ Del - SFTP delete
-  - ✅ F2 - SFTP rename
-- ✅ **Context Menus**
-  - ✅ Tab context menu (close, close others, duplicate)
-  - ✅ Terminal context menu (copy, paste, clear)
-  - ✅ SFTP context menu (download, upload, delete, rename, properties)
-  - ✅ Connection list context menu (connect, edit, delete, duplicate)
-
-### Phase 5: Platform Integration (100%) ✅
-- ✅ **Credential Storage**
-  - ✅ macOS Keychain implementation (security-framework)
-  - ✅ Windows Credential Manager implementation (keyring)
-  - ✅ Linux Secret Service implementation (keyring)
-  - ✅ BSD encrypted file fallback (keyring)
-  - ✅ Delete credential support
-- ✅ **Platform-Specific Code**
-  - ✅ macOS module (src/platform/macos.rs)
-  - ✅ Windows module (src/platform/windows.rs)
-  - ✅ Linux module (src/platform/linux.rs)
-  - ✅ BSD module (src/platform/bsd.rs)
-- ✅ **Build System**
-  - ✅ Docker multi-arch (buildx)
-  - ✅ Static linking (musl for Linux)
-  - ✅ Cross-compilation targets
-  - ✅ Binary naming convention
-  - ✅ Release automation
-
-### Phase 6: Testing & Quality (100%) ✅
-- ✅ **Unit Tests** (15 test files)
-  - ✅ Theme tests
-  - ✅ Database tests
-  - ✅ Transfer tests
-  - ✅ VT parser tests
-  - ✅ Forwarding tests
-  - ✅ Settings tests
-  - ✅ Platform tests
-  - ✅ Helper tests
-- ✅ **Integration Tests**
-  - ✅ SSH connection flow tests
-  - ✅ SFTP operation tests
-  - ✅ Port forwarding tests
-  - ✅ Theme integration tests
-  - ✅ Full workflow tests
-  - ✅ SSH config parser tests
-- ✅ **CI/CD**
-  - ✅ GitHub Actions workflows
-  - ✅ Automated builds
-  - ✅ Multi-platform testing
-  - ✅ Release automation
+Acceptance: `make build` (which calls `cargo build --release` inside the docker image) exits 0.
 
 ---
 
-## 🚀 READY FOR PRODUCTION
+## Phase 1 — Tier-1 SSH-client viability
 
-### What's Been Built
+Target: parity on day-to-day SSH features so a power user could daily-drive desktop. Order is dependency-aware.
 
-**Complete SSH Client with:**
-- ✅ Full terminal emulation (VT100/xterm)
-- ✅ Tab-based interface
-- ✅ SFTP browser with file management
-- ✅ Port forwarding (local/remote/dynamic)
-- ✅ SSH config file support
-- ✅ Secure credential storage (OS keychain)
-- ✅ 10+ color themes
-- ✅ Comprehensive keyboard shortcuts
-- ✅ Context menus
-- ✅ Cross-platform (Windows, Linux, macOS, BSD)
-- ✅ Static binaries (no runtime dependencies)
-- ✅ Docker build system (multi-arch)
-- ✅ Full test coverage
+**SSH core:**
+- [ ] Keyboard-interactive auth (russh has it; just wire the prompts → UI dialog)
+- [ ] SSH agent forwarding (russh `agent` feature)
+- [ ] Universal key parser via `ssh-key` crate — OpenSSH v1, PEM (PKCS#1/8), PuTTY v2/v3
+- [ ] In-app key generation: RSA / ECDSA P-256/384/521 / Ed25519 / DSA
+- [ ] OpenSSH user certificate auth (`*-cert.pub`) — `ssh-key` already supports
+- [ ] Per-connection env vars (DB column `env_vars`, sent via `russh::Channel::env`)
+- [ ] Always-on keepalive (60s, count-max 3) — apply unconditionally to every russh session per Issue #166
 
-### Build & Deploy
+**SFTP browser:**
+- [ ] Get the dual-pane browser working with the fixed `russh-sftp` calls
+- [ ] Remote file editor inline (open → edit in egui textarea → save back)
+- [ ] chmod editor dialog
+- [ ] SCP fallback for servers without SFTP subsystem
 
-```bash
-# Build all platforms
-make build          # Debug builds → ./binaries/
+**Port forwarding:**
+- [ ] -L (local) — likely already partly done; verify against russh API
+- [ ] -R (remote)
+- [ ] -D (dynamic / SOCKS5)
+- [ ] Background tunnels (run forwards without an attached terminal session)
+- [ ] ProxyJump cascading
 
-# Create release
-make release        # Release builds → ./releases/
-                   # Creates archive, checksums, release.txt
+**SSH config:**
+- [ ] Read `~/.ssh/config` directly via `ssh2-config` — don't import a copy, the desktop should reflect the user's existing setup
+- [ ] Round-trip export (write back valid `Host …` blocks)
+- [ ] Bulk import: CSV / JSON / PuTTY .ppk lists
 
-# Run tests
-make test          # Full test suite in Docker
+**Multi-tab + state:**
+- [ ] Multi-tab same-host independent shells (Issue #163) — per-tab `russh::Channel`, sibling tabs survive when one shell exits
+- [ ] Tmux/Screen/Zellij auto-launch + `postConnectScript` (Issue #170)
+- [ ] Reconnect button on disconnected tab
+- [ ] Active Sessions strip (Issue #165) — top of window, dynamic title via OSC 0/2
 
-# Build Docker images (multi-arch)
-make docker        # Push to registry with tags: :latest :version :commit :YYMM
-make docker-local  # Build for local use only
-```
+**Terminal:**
+- [ ] Find/search in scrollback (Wave 1)
+- [ ] 24-bit true color (`alacritty_terminal` supports — verify rendering)
+- [ ] Hardware-keyboard modifier-aware nav keys + AltGr (Issue #171) — xterm-style `\e[1;<mod><letter>`
+- [ ] Centralised error dialogs with Copy button (Issue #167) — clipboard via `arboard`
 
-### Release Artifacts
-
-```
-releases/
-├── tabssh-linux-amd64          # Static musl binary
-├── tabssh-linux-arm64          # Static musl binary
-├── tabssh (native)             # Host platform binary
-├── checksums.txt               # SHA256 sums
-├── release.txt                 # Version info
-└── tabssh-{version}-source.tar.gz  # Source archive (no VCS)
-```
+**Build/version:**
+- [ ] Cold-start commit-id marker (Issue #164) — `build.rs` resolves the commit, log on startup once per change
 
 ---
 
-## 📦 Deliverables
+## Phase 2 — Tier-2 desktop-shines features
 
-### Source Code
-- **58 Rust modules** across:
-  - SSH core (connection, auth, session management)
-  - SFTP client (full file operations)
-  - Port forwarding (local, remote, SOCKS5)
-  - Terminal emulation (VT parser, renderer)
-  - UI (egui-based, screens for all features)
-  - Database (SQLite persistence)
-  - Configuration (themes, settings, SSH config)
-  - Platform integration (keychain for all OS)
-  - Crypto (key management)
-  - Utils (logging, errors, helpers)
+Where desktop ergonomics genuinely beat mobile.
 
-### Tests
-- **15 test suites** covering:
-  - All core functionality
-  - Integration tests for complete workflows
-  - Unit tests for components
-  - Platform-specific tests
-
-### Build System
-- **Makefile** with targets:
-  - `build` - Docker-based debug builds
-  - `release` - Production builds with archives
-  - `test` - Run full test suite
-  - `docker` - Multi-arch image builds
-  - `docker-local` - Local development images
-  - `clean` - Cleanup artifacts
-
-### CI/CD
-- **GitHub Actions** workflows:
-  - `ci.yml` - Continuous integration
-  - `development.yml` - Development builds
-  - `release.yml` - Release automation
-
-### Documentation
-- ✅ README.md - User documentation
-- ✅ CLAUDE.md - Complete specification (synced with Android)
-- ✅ TODO.AI.md - This file (syncing with Android features)
-- ✅ CONTRIBUTING.md - Contribution guidelines
+- [ ] Workspaces (named tab groups, DB v21 equivalent) — desktop can give each its own window
+- [ ] Command palette (Ctrl+K), Quick switcher (Ctrl+J), History palette (Ctrl+R)
+- [ ] Split view (multi-pane terminals in one window)
+- [ ] Broadcast input + cluster commands with live streaming
+- [ ] GUI theme editor — reuse mobile's JSON theme format (kotlinx.serialization is JSON; serde works)
+- [ ] All 23 built-in themes (port `BuiltInThemes.kt` enum table)
+- [ ] Per-host color tags (DB v22 equivalent)
+- [ ] Snippets library + prompt-style variables `{?password}`
+- [ ] Identity abstraction (reusable credentials)
+- [ ] Connection groups/folders (DB v3 equivalent — hierarchical)
+- [ ] Hypervisor management — Proxmox VE / XCP-ng / Xen Orchestra (REST + WS) / VMware ESXi/vCenter; `reqwest` + `tokio-tungstenite`
+- [ ] VM serial console via hypervisor API (no VM network needed)
+- [ ] Cloud host import — DigitalOcean / Hetzner / Linode / Vultr (opt-in, tokens in `keyring` not DB)
+- [ ] Telnet protocol (RFC 854)
+- [ ] Recordable macros (Issue #173, DB v26) — capture raw byte sequences
+- [ ] **QR pairing — desktop side** (mobile shipped 2026-04-28). See "QR pairing" section in the project tracker
 
 ---
 
-## 🔄 Phase 7: Android Feature Parity (45% → 100%)
+## Phase 3 — Tier-3 polish + platform integration
 
-### New Features from Android v1.1.0 (2025-12-19 Sync)
-
-#### 7.1 Cloud Sync System ⭐⭐⭐ CRITICAL
-**Status:** 🔴 Not Started  
-**Effort:** 20-24 hours  
-**Priority:** HIGH (Cross-device sync is essential)
-
-**Android Implementation:**
-- ✅ Google Drive OAuth 2.0 + appDataFolder access
-- ✅ WebDAV for Nextcloud/ownCloud (degoogled devices)
-- ✅ AES-256-GCM encryption with PBKDF2 (100k iterations)
-- ✅ 3-way merge algorithm with field-level conflict detection
-- ✅ Background sync with WorkManager
-- ✅ GZIP compression, WiFi-only option
-
-**Desktop Implementation Tasks:**
-- [ ] Create `src/sync/` module structure
-- [ ] Implement `GoogleDriveSyncBackend` using `oauth2` crate
-  - [ ] OAuth 2.0 flow with device/browser redirect
-  - [ ] Drive API v3 integration with `reqwest`
-  - [ ] Upload/download encrypted sync files
-- [ ] Implement `WebDAVSyncBackend` using `reqwest-dav`
-  - [ ] Basic authentication support
-  - [ ] File upload/download operations
-  - [ ] Directory listing and creation
-- [ ] Create `UnifiedSyncManager` for backend orchestration
-  - [ ] Automatic backend detection/selection
-  - [ ] Fallback logic (Google Drive → WebDAV)
-- [ ] Implement encryption layer (`aes-gcm` + `pbkdf2`)
-  - [ ] Password-based key derivation (PBKDF2, 100k iterations)
-  - [ ] AES-256-GCM encryption/decryption
-  - [ ] Secure password storage in OS keychain
-- [ ] Create `MergeEngine` for 3-way merge
-  - [ ] Field-level conflict detection
-  - [ ] Last-write-wins for simple conflicts
-  - [ ] Manual resolution for complex conflicts
-- [ ] Implement `SyncScheduler` for background sync
-  - [ ] Tokio task scheduling (15min to 24h intervals)
-  - [ ] Network connectivity checks
-  - [ ] Sync triggers (manual, on launch, on change, scheduled)
-- [ ] Add sync preferences to settings UI
-  - [ ] Backend selection (Google Drive, WebDAV, None)
-  - [ ] WebDAV server configuration (URL, credentials)
-  - [ ] Sync password setup
-  - [ ] Sync frequency selection
-  - [ ] WiFi-only toggle
-- [ ] Update database schema with sync metadata
-  - [ ] Add `last_synced_at`, `sync_version`, `modified_at`, `sync_device_id` to all entities
-  - [ ] Create migration for existing data
-
-**Files to Create:**
-```
-src/sync/mod.rs                    # Main sync module
-src/sync/google_drive.rs           # Google Drive backend
-src/sync/webdav.rs                 # WebDAV backend
-src/sync/unified_manager.rs        # Backend orchestration
-src/sync/encryptor.rs              # AES-256-GCM encryption
-src/sync/merge_engine.rs           # 3-way merge algorithm
-src/sync/scheduler.rs              # Background sync scheduling
-src/sync/models.rs                 # Sync data models
-```
-
-**Crates to Add:**
-```toml
-oauth2 = "4.4"                     # OAuth 2.0 client
-reqwest = { version = "0.11", features = ["json", "blocking"] }
-reqwest-dav = "0.1"                # WebDAV client
-aes-gcm = "0.10"                   # AES-256-GCM encryption
-pbkdf2 = { version = "0.12", features = ["simple"] }
-flate2 = "1.0"                     # GZIP compression
-```
+- [ ] Theme JSON import/export
+- [ ] Encrypted ZIP backup/restore (compatible with android's BackupManager format)
+- [ ] **Cloud sync — filesystem-watch model** (not SAF):
+  - On-disk format byte-identical to mobile's `TABSSH_SYNC_V2` (32-byte header + 32-byte salt + 12-byte IV + GZIP'd JSON, AES-GCM, PBKDF2-HMAC-SHA256 100k iter, 256-bit key)
+  - User points TabSSH at a folder; their existing sync app (Nextcloud / syncthing / rclone / OneDrive / Dropbox) handles transport
+  - Three-way merge with conflict UI (port `MergeEngine` + `ConflictResolver`)
+  - `notify` crate watches the folder
+- [ ] Platform keychain via `keyring` crate (single API across Linux Secret Service / macOS Keychain / Windows Credential Manager)
+- [ ] System tray (`tray-icon` crate) + auto-launch on login
+- [ ] CLI mode: `tabssh user@host` invocation from shell, falls through to existing GUI tab
+- [ ] Native installers: `.deb`, `.rpm`, AUR `PKGBUILD`, AppImage, `.dmg`, Homebrew formula, `.msi`, WinGet manifest, Scoop bucket, FreeBSD `pkg`/ports, OpenBSD packages, NetBSD `pkgsrc`
+- [ ] PIN code app lock (Wave 3.2 equivalent)
+- [ ] Crash reporter via `panic::set_hook` writing to `~/.local/share/tabssh/crashes/`
+- [ ] Settings persistence (most current settings UI is stub)
+- [ ] Connection history view (separate from "last connected")
+- [ ] What's-new / changelog screen on update (read from `release.txt`)
 
 ---
 
-#### 7.2 Universal SSH Key Support ⭐⭐⭐ CRITICAL
-**Status:** 🟡 Partial (russh basic support)  
-**Effort:** 12-16 hours  
-**Priority:** HIGH (All key formats needed)
+## Phase 4 — situational / lower priority
 
-**Android Implementation:**
-- ✅ Parses OpenSSH, PEM (PKCS#1), PKCS#8, PuTTY v2/v3
-- ✅ Supports RSA, ECDSA (all curves), Ed25519, DSA
-- ✅ In-app key generation with passphrases
-- ✅ SHA-256 fingerprint display
-
-**Desktop Implementation Tasks:**
-- [ ] Replace basic russh key handling with `ssh-key` crate
-- [ ] Implement universal key parser in `src/crypto/keys.rs`
-  - [ ] OpenSSH format parser
-  - [ ] PEM format parser (PKCS#1 and PKCS#8)
-  - [ ] PuTTY v2/v3 format parser
-  - [ ] Automatic format detection
-- [ ] Add key generation functionality
-  - [ ] RSA key generation (2048, 3072, 4096 bits)
-  - [ ] ECDSA key generation (P-256, P-384, P-521)
-  - [ ] Ed25519 key generation
-  - [ ] Passphrase encryption support
-- [ ] Create key management UI dialog
-  - [ ] List all stored keys
-  - [ ] Import from file (all formats)
-  - [ ] Paste key from clipboard
-  - [ ] Generate new key pair
-  - [ ] Export key (PEM or OpenSSH format)
-  - [ ] Delete key with confirmation
-  - [ ] Display SHA-256 fingerprints
-- [ ] Update connection edit UI for key selection
-  - [ ] Dropdown of available keys
-  - [ ] "Manage Keys" button → key management dialog
-
-**Files to Modify/Create:**
-```
-src/crypto/keys.rs                 # Universal key parser
-src/crypto/key_generator.rs        # Key generation
-src/ui/key_management_dialog.rs    # Key management UI
-```
-
-**Crates to Add:**
-```toml
-ssh-key = { version = "0.6", features = ["encryption", "alloc"] }
-ssh-encoding = "0.2"               # SSH format encoding/decoding
-ed25519-dalek = "2.1"              # Ed25519 key generation
-rsa = "0.9"                        # RSA key generation
-p256 = "0.13"                      # ECDSA P-256
-p384 = "0.13"                      # ECDSA P-384
-```
+- [ ] X11 forwarding (`x11rb` crate, real X11 servers — much more useful than mobile's stub)
+- [ ] Mosh — pure-Rust client. Avoid the mobile cross-compile dance for `libmosh-client.so`
+- [ ] Multi-language support (mirror mobile's en/es/fr/de)
+- [ ] Accessibility audits (screen-reader compat — Linux Orca, macOS VoiceOver, Windows Narrator)
+- [ ] Performance monitor with charts (`egui_plot`)
+- [ ] HTTP/SOCKS proxy configuration UI
 
 ---
 
-#### 7.3 Connection Groups/Folders ⭐⭐ HIGH
-**Status:** 🔴 Not Started  
-**Effort:** 8-10 hours  
-**Priority:** MEDIUM-HIGH (Organization feature)
+## Out of scope (where android leads but desktop shouldn't follow)
 
-**Android Implementation:**
-- ✅ Connections organized in folders
-- ✅ Color-coded groups
-- ✅ Drag-to-reorder groups
-- ✅ Expandable/collapsible in UI
-
-**Desktop Implementation Tasks:**
-- [ ] Add `ConnectionGroup` entity to database
-  - [ ] Fields: id, name, color, icon, sort_order
-  - [ ] Create DAO methods
-- [ ] Add `group_id` field to `ConnectionProfile`
-- [ ] Update database schema (migration v2 → v3)
-- [ ] Implement tree view in connection list UI
-  - [ ] Use egui `CollapsingHeader` for groups
-  - [ ] Display connections under each group
-  - [ ] Support drag-and-drop reordering
-- [ ] Add group management dialog
-  - [ ] Create new group
-  - [ ] Edit group (name, color, icon)
-  - [ ] Delete group (move connections to "Ungrouped")
-  - [ ] Reorder groups
-- [ ] Update connection edit UI to select group
-- [ ] Migrate existing connections to "Default" group
-
-**Files to Create/Modify:**
-```
-src/storage/entities.rs            # Add ConnectionGroup struct
-src/storage/database.rs            # Add group methods
-src/ui/group_management_dialog.rs  # Group management UI
-src/ui/connection_list.rs          # Update to show groups
-```
+- Foreground service notification → use system tray
+- SAF document URIs → desktop reads files directly
+- On-screen keyboard customisation → real keyboard always available
+- Volume key bindings, pinch-zoom → use Ctrl+Scroll
+- Swipe gestures → use Ctrl+Tab + mouse
+- ANR watchdog (android-specific) → `panic::set_hook` covers crashes; UI-thread freeze detection is optional polish
+- Tasker integration → use shell scripts / `.desktop` actions
+- Android widget → N/A
+- Foldable layout / sw720dp / book-mode → desktop windows are resizable anyway
+- FLAG_SECURE screenshot protection → desktop OSes don't expose an equivalent universally
+- Cross-platform desktop app (sic) → that IS this project
 
 ---
 
-#### 7.4 Snippets Library ⭐⭐ HIGH
-**Status:** 🔴 Not Started  
-**Effort:** 6-8 hours  
-**Priority:** MEDIUM (Productivity boost)
+## Acceptance for "in line with android"
 
-**Android Implementation:**
-- ✅ Quick command templates
-- ✅ Variable substitution ({{username}}, {{hostname}})
-- ✅ Category organization
-- ✅ Auto-run on connect option
+Considered done when, for every row in the project tracker's "Comparison with Android Version" matrix:
+- ✅ rows show ✅ on the desktop column too, OR
+- 🔴 rows have a tracked TODO above with file paths and crate choices, OR
+- 🚫 rows are explicitly listed in "Out of scope" above with reason
 
-**Desktop Implementation Tasks:**
-- [ ] Create `Snippet` entity in database
-  - [ ] Fields: id, name, command, description, category, global_flag
-  - [ ] DAO methods for CRUD operations
-- [ ] Implement snippet picker UI (bottom panel in terminal view)
-  - [ ] Searchable snippet list
-  - [ ] Category filtering
-  - [ ] Insert snippet at cursor
-- [ ] Add snippet manager dialog
-  - [ ] Create/edit/delete snippets
-  - [ ] Organize by categories
-  - [ ] Import/export snippet libraries
-- [ ] Implement variable substitution
-  - [ ] Parse {{variable}} syntax
-  - [ ] Replace with connection data
-  - [ ] Support custom variables with prompts
-- [ ] Add keyboard shortcut (Ctrl+Shift+S) to open snippet picker
-- [ ] Seed database with default snippets (docker, git, systemctl commands)
+The QR pairing wire format must be byte-compatible with mobile (test vectors checked into both repos).
 
-**Files to Create:**
-```
-src/storage/entities.rs            # Add Snippet struct
-src/storage/database.rs            # Add snippet methods
-src/ui/snippet_picker.rs           # Snippet selection UI
-src/ui/snippet_manager_dialog.rs   # Snippet management
-src/terminal/snippet_engine.rs     # Variable substitution
-```
-
----
-
-#### 7.5 Proxy/Jump Host Support ⭐⭐ HIGH
-**Status:** 🔴 Not Started  
-**Effort:** 8-10 hours  
-**Priority:** MEDIUM-HIGH (Enterprise requirement)
-
-**Android Implementation:**
-- ✅ ProxyJump through bastion servers
-- ✅ Chained jump hosts (A → B → C)
-- ✅ Visual indicator in connection list
-
-**Desktop Implementation Tasks:**
-- [ ] Add `proxy_connection_id` field to `ConnectionProfile`
-- [ ] Update connection edit UI with jump host selector
-  - [ ] Dropdown of available connections
-  - [ ] Support chained jumps
-- [ ] Implement ProxyJump logic in `src/ssh/connection.rs`
-  - [ ] Establish connection to jump host first
-  - [ ] Port forward through jump host
-  - [ ] Connect to target through tunnel
-  - [ ] Support multiple jump levels
-- [ ] Add visual indicator in connection list (chain icon)
-- [ ] Handle authentication for jump hosts
-- [ ] Add error handling for jump host failures
-
-**Files to Modify:**
-```
-src/storage/entities.rs            # Add proxy_connection_id field
-src/ssh/connection.rs              # Implement ProxyJump
-src/ui/connection_edit_dialog.rs   # Add jump host selector
-src/ui/connection_list.rs          # Add visual indicator
-```
-
----
-
-#### 7.6 Desktop-Specific UX Improvements 🖥️
-**Status:** 🟡 Partial  
-**Effort:** 6-8 hours  
-**Priority:** MEDIUM
-
-**Desktop-Adapted Features from Android:**
-
-**7.6.1 Ctrl+Scroll Font Size Adjustment** (2 hours)
-- [ ] Detect Ctrl+Scroll events in terminal view
-- [ ] Adjust font size by ±2pt increments
-- [ ] Show tooltip with current font size
-- [ ] Respect min (8pt) and max (32pt) bounds
-- [ ] Save font size to preferences
-
-**7.6.2 Ctrl+Click URLs in Terminal** (3 hours)
-- [ ] Add URL detection regex to terminal renderer
-- [ ] Detect Ctrl+Click on URLs
-- [ ] Open URL in default browser
-- [ ] Add settings toggle to enable/disable
-
-**7.6.3 Ctrl+F Search in Connection List** (2 hours)
-- [ ] Add search dialog (Ctrl+F)
-- [ ] Real-time filtering by name/host/username
-- [ ] Highlight search terms in results
-- [ ] Preserve search state
-
-**7.6.4 Right-Click Sort Menu** (1 hour)
-- [ ] Add context menu to connection list header
-- [ ] Sort options: Name, Host, Usage, Recent
-- [ ] Save sort preference
-
-**7.6.5 Pinned Connections** (2 hours)
-- [ ] Add `pinned` boolean field to ConnectionProfile
-- [ ] Pin/unpin via right-click menu
-- [ ] Display pinned connections at top
-
----
-
-#### 7.7 Identity Abstraction ⭐ MEDIUM
-**Status:** 🔴 Not Started  
-**Effort:** 6-8 hours  
-**Priority:** LOW-MEDIUM (Nice to have)
-
-**Android Implementation:**
-- ✅ Reusable identity entities
-- ✅ Link connections to identities
-- ✅ Reduces credential duplication
-
-**Desktop Implementation Tasks:**
-- [ ] Create `Identity` entity (id, name, username, key_id, encrypted_password)
-- [ ] Update `ConnectionProfile` to reference `identity_id` instead of inline credentials
-- [ ] Create identity management dialog
-- [ ] Migrate existing connections to auto-created identities
-- [ ] Add identity sync to cloud backup
-
----
-
-## 📊 Phase 7 Progress Tracking
-
-**Total Features:** 7 major feature groups  
-**Completed:** 0/7 (0%)  
-**In Progress:** 0/7  
-**Not Started:** 7/7
-
-**Estimated Time:** 75-95 hours total
-
-**Priority Order:**
-1. Cloud Sync System (20-24h) - CRITICAL for cross-device usage
-2. Universal SSH Key Support (12-16h) - CRITICAL for compatibility
-3. Connection Groups (8-10h) - HIGH for organization
-4. Proxy/Jump Host (8-10h) - HIGH for enterprise users
-5. Snippets Library (6-8h) - HIGH for productivity
-6. Desktop UX Improvements (6-8h) - MEDIUM for usability
-7. Identity Abstraction (6-8h) - LOW for advanced users
-
----
-
-## 🎯 Next Steps
-
-### Week 1: Critical Infrastructure
-- Implement Cloud Sync System (Google Drive + WebDAV)
-- Add encryption and merge engine
-- Test sync across platforms
-
-### Week 2: SSH Key Compatibility
-- Implement universal SSH key parser
-- Add key generation functionality
-- Create key management UI
-
-### Week 3: Organization Features
-- Implement connection groups/folders
-- Add snippets library
-- Implement proxy/jump host support
-
-### Week 4: Polish & Testing
-- Add desktop UX improvements
-- Comprehensive testing on all platforms
-- Performance optimization
-- Documentation updates
-
----
-
-## 🎉 CURRENT STATUS
-
-**TabSSH Desktop Core: ✅ 100% COMPLETE - PRODUCTION READY**
-
-**Android Feature Parity: 🔄 45% → Target 100%**
-
-All core SSH functionality is complete and production-ready. Now syncing with Android v1.1.0 to add advanced features:
-- Pure Rust implementation (memory-safe, fast)
-- Static binaries (no dependencies)
-- Cross-platform (11 platform variants)
-- Modern UI (egui)
-- Full test coverage
-- Automated build system
-- Multi-arch Docker support
-
-**Phase 7 adds:**
-- Cloud synchronization (Google Drive + WebDAV)
-- Universal SSH key support (all formats)
-- Advanced organization (groups, snippets, jump hosts)
-- Desktop-optimized UX
-
-**Total Estimated Completion:** 75-95 hours additional work
-
----
-
-**STATUS: ✅ CORE COMPLETE | 🔄 SYNCING ANDROID FEATURES** 🚀
+The cloud sync `TABSSH_SYNC_V2` format must be byte-compatible with mobile (an encrypted blob written by desktop must round-trip through mobile and vice versa).
