@@ -115,16 +115,16 @@ impl client::Handler for SshClientHandler {
     type Error = anyhow::Error;
 
     async fn check_server_key(
-        &mut self,
+        mut self,
         server_public_key: &key::PublicKey,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<(Self, bool), Self::Error> {
         log::info!(
             "Server key for {}: {}",
             self.host,
             server_public_key.fingerprint()
         );
         self.server_public_key = Some(server_public_key.clone());
-        Ok(true)
+        Ok((self, true))
     }
 }
 
@@ -311,7 +311,7 @@ pub async fn connect_through_jump_host(
             SshConnection::connect_password(jump_config, password).await?
         }
         Credentials::PublicKey { key_path, passphrase } => {
-            SshConnection::connect_key(jump_config, key_path, passphrase.as_deref()).await?
+            SshConnection::connect_key(jump_config, &key_path.to_string_lossy(), passphrase.as_deref()).await?
         }
         _ => return Err(anyhow!("Unsupported credential type for jump host")),
     };
