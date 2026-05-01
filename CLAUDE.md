@@ -1122,6 +1122,28 @@ Reference: `../android/AI.md` §18.
 7. Code review
 8. Merge
 
+### Git workflow & commit rules
+
+These rules are imported from the android sibling project's `AI.md` §17 (rule 12) and runbook so both repos commit identically.
+
+1. **Save the commit message to `{project_root}/.git/COMMIT_MESS` first.** Project convention: the maintainer can then `git commit -F .git/COMMIT_MESS` directly. Overwrite the file each time. Do not save to `/tmp/` paths. Do not paste the message inline only — the file is the source of truth.
+2. **Use `gitcommit all`** to stage + commit + push. With `.git/COMMIT_MESS` present, that one command does the right thing. Do not use `-m` flags — the auto-message generator will override `-m` content. The proper flow is:
+   ```bash
+   # 1. write the message
+   cat > .git/COMMIT_MESS <<'EOF'
+   📝 short subject line with leading + trailing emoji 📝
+
+   Optional body explaining the why.
+   EOF
+   # 2. commit + push
+   gitcommit all
+   ```
+3. **Never add `Co-Authored-By` (or any attribution footer / "Generated with" line).** The maintainer authors every commit personally — there is no separate co-author. End the commit body at the last description line; no trailer.
+4. **Use heredoc** for multi-line messages (avoids shell-escaping issues).
+5. **Match the existing emoji style** when writing messages — recent commits use leading + trailing emoji like `📝 …text… 📝` or `🗃️ …text… 🗃️`. Pick what fits the change (📝 docs / 🗃️ refactor / 🔧 config / 🆕 feature / 🐛 fix).
+6. **Don't bypass hooks** with `--no-verify` or signing flags. If a hook fails, fix the underlying issue.
+7. **Don't amend pushed commits.** Always create a new commit. (See gitcommit's `fixup` subcommand for the safe equivalent on the most recent local commit.)
+
 ---
 
 ## License

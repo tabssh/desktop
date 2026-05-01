@@ -7,7 +7,9 @@
       "Bash(gitcommit --message \"📝 Sync CLAUDE.md spec with android v26 — DB v23→v26, Issue #163-#175, QR pairing TODO checklist, accurate build status \\(50 errors verified\\) 📝\")",
       "Bash(gitcommit -m \"📝 Sync CLAUDE.md spec with android v26 — DB v23→v26, Issue #163-#175, QR pairing TODO checklist, accurate build status \\(50 errors verified\\) 📝\")",
       "Bash(gitcommit -m \"🗃️ Replace TODO.AI.md with accurate work list; remove stale Dec 2025 STATUS/PROGRESS_REPORT/COMPILATION_STATUS snapshots that contradicted the source-of-truth spec 🗃️\")",
-      "Bash(gitcommit -m \"📝 Expand TODO.AI.md to full phase breakdown — Phase 0 \\(build\\) → Phase 5 \\(speculative\\), every wave/issue mapped, hypervisor + QR pairing + cloud sync wire formats specified, out-of-scope table 📝\")"
+      "Bash(gitcommit -m \"📝 Expand TODO.AI.md to full phase breakdown — Phase 0 \\(build\\) → Phase 5 \\(speculative\\), every wave/issue mapped, hypervisor + QR pairing + cloud sync wire formats specified, out-of-scope table 📝\")",
+      "Bash(gitcommit --options)",
+      "Bash(gitcommit all *)"
     ]
   }
 }
