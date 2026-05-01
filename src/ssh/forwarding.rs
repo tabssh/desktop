@@ -1,6 +1,6 @@
 //! SSH port forwarding implementation
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use russh::client::Handle;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -8,15 +8,13 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 
-/// Port forward type
 #[derive(Debug, Clone, PartialEq)]
 pub enum ForwardType {
-    Local,  // ssh -L
-    Remote, // ssh -R
+    Local,   // ssh -L
+    Remote,  // ssh -R
     Dynamic, // ssh -D (SOCKS)
 }
 
-/// Port forward configuration
 #[derive(Debug, Clone)]
 pub struct PortForward {
     pub id: uuid::Uuid,
@@ -66,7 +64,6 @@ impl PortForward {
     }
 }
 
-/// Port forwarding manager
 pub struct ForwardingManager {
     forwards: Arc<Mutex<Vec<PortForward>>>,
 }
@@ -93,16 +90,19 @@ impl ForwardingManager {
     pub async fn start_local_forward<H>(
         &self,
         forward: PortForward,
-        ssh_handle: Handle<H>,
+        ssh_handle: Arc<Handle<H>>,
     ) -> Result<()>
     where
-        H: russh::client::Handler + Send + 'static,
+        H: russh::client::Handler + Send + Sync + 'static,
     {
-        let listen_addr: SocketAddr = format!("{}:{}",forward.listen_addr,forward.listen_port).parse()?;
+        let listen_addr: SocketAddr =
+            format!("{}:{}", forward.listen_addr, forward.listen_port).parse()?;
         let listener = TcpListener::bind(listen_addr).await?;
-        
-        log::info!("Localforward:{}->{}:{}",
-            listen_addr, forward.remote_host, forward.remote_port);
+
+        log::info!(
+            "Local forward: {} -> {}:{}",
+            listen_addr, forward.remote_host, forward.remote_port
+        );
 
         let remote_host = forward.remote_host.clone();
         let remote_port = forward.remote_port;
@@ -110,58 +110,20 @@ impl ForwardingManager {
         tokio::spawn(async move {
             loop {
                 match listener.accept().await {
-                    Ok((mut local_stream, _)) => {
+                    Ok((local_stream, peer)) => {
                         let ssh = ssh_handle.clone();
                         let host = remote_host.clone();
                         let port = remote_port;
-
                         tokio::spawn(async move {
-                            match ssh.channel_open_direct_tcpip(
-                                &host,
-                                port as u32,
-                                "127.0.0.1",
-                                0,
-                            ).await {
-                                Ok(mut channel) => {
-                                    let (mut read_half, mut write_half) = local_stream.split();
-                                    
-                                    tokio::spawn(async move {
-                                        let mut buf = [0u8; 8192];
-                                        loop {
-                                            match read_half.read(&mut buf).await {
-                                                Ok(0) => break,
-                                                Ok(n) => {
-                                                    if channel.data(&buf[..n]).await.is_err() {
-                                                        break;
-                                                    }
-                                                }
-                                                Err(_) => break,
-                                            }
-                                        }
-                                    });
-
-                                    let mut buf = Vec::new();
-                                    loop {
-                                        match channel.wait().await {
-                                            Some(russh::ChannelMsg::Data { data }) => {
-                                                if write_half.write_all(&data).await.is_err() {
-                                                    break;
-                                                }
-                                            }
-                                            Some(russh::ChannelMsg::Eof) | 
-                                            Some(russh::ChannelMsg::Close) | None => break,
-                                            _ => {}
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    log::error!("FailedtoopenSSHchannel:{}",e);
-                                }
+                            if let Err(e) =
+                                pipe_local_to_channel(ssh, local_stream, host, port).await
+                            {
+                                log::warn!("forward({}): {}", peer, e);
                             }
                         });
                     }
                     Err(e) => {
-                        log::error!("Accepterror:{}",e);
+                        log::error!("Accept error: {}", e);
                     }
                 }
             }
@@ -173,15 +135,16 @@ impl ForwardingManager {
     pub async fn start_dynamic_forward<H>(
         &self,
         forward: PortForward,
-        ssh_handle: Handle<H>,
+        ssh_handle: Arc<Handle<H>>,
     ) -> Result<()>
     where
-        H: russh::client::Handler + Send + 'static,
+        H: russh::client::Handler + Send + Sync + 'static,
     {
-        let listen_addr: SocketAddr = format!("{}:{}",forward.listen_addr,forward.listen_port).parse()?;
+        let listen_addr: SocketAddr =
+            format!("{}:{}", forward.listen_addr, forward.listen_port).parse()?;
         let listener = TcpListener::bind(listen_addr).await?;
-        
-        log::info!("Dynamicforward(SOCKS):{}",listen_addr);
+
+        log::info!("Dynamic forward (SOCKS): {}", listen_addr);
 
         tokio::spawn(async move {
             loop {
@@ -191,7 +154,7 @@ impl ForwardingManager {
                         tokio::spawn(handle_socks_connection(stream, ssh));
                     }
                     Err(e) => {
-                        log::error!("Accepterror:{}",e);
+                        log::error!("Accept error: {}", e);
                     }
                 }
             }
@@ -207,38 +170,48 @@ impl Default for ForwardingManager {
     }
 }
 
-async fn handle_socks_connection<H>(mut stream: TcpStream, ssh_handle: Handle<H>)
+async fn pipe_local_to_channel<H>(
+    ssh: Arc<Handle<H>>,
+    mut local: TcpStream,
+    remote_host: String,
+    remote_port: u16,
+) -> Result<()>
 where
-    H: russh::client::Handler + Send + 'static,
+    H: russh::client::Handler + Send + Sync + 'static,
 {
-    // Basic SOCKS5 implementation
+    let channel = ssh
+        .channel_open_direct_tcpip(remote_host, remote_port as u32, "127.0.0.1", 0)
+        .await?;
+    let mut channel_stream = channel.into_stream();
+    tokio::io::copy_bidirectional(&mut local, &mut channel_stream).await?;
+    Ok(())
+}
+
+async fn handle_socks_connection<H>(mut stream: TcpStream, ssh_handle: Arc<Handle<H>>)
+where
+    H: russh::client::Handler + Send + Sync + 'static,
+{
     let mut buf = [0u8; 2];
     if stream.read_exact(&mut buf).await.is_err() {
         return;
     }
-
     if buf[0] != 5 {
-        return; // Not SOCKS5
+        return;
     }
-
-    // Send no authentication required
     if stream.write_all(&[5, 0]).await.is_err() {
         return;
     }
 
-    // Read request
-    let mut buf = [0u8; 4];
-    if stream.read_exact(&mut buf).await.is_err() {
+    let mut req = [0u8; 4];
+    if stream.read_exact(&mut req).await.is_err() {
+        return;
+    }
+    if req[1] != 1 {
         return;
     }
 
-    if buf[1] != 1 {
-        return; // Only CONNECT supported
-    }
-
-    let (host, port) = match buf[3] {
+    let (host, port) = match req[3] {
         1 => {
-            // IPv4
             let mut addr = [0u8; 4];
             if stream.read_exact(&mut addr).await.is_err() {
                 return;
@@ -247,11 +220,12 @@ where
             if stream.read_exact(&mut port_buf).await.is_err() {
                 return;
             }
-            let port = u16::from_be_bytes(port_buf);
-            (format!("{}.{}.{}.{}",addr[0],addr[1],addr[2],addr[3]),port)
+            (
+                format!("{}.{}.{}.{}", addr[0], addr[1], addr[2], addr[3]),
+                u16::from_be_bytes(port_buf),
+            )
         }
         3 => {
-            // Domain name
             let mut len = [0u8; 1];
             if stream.read_exact(&mut len).await.is_err() {
                 return;
@@ -264,53 +238,30 @@ where
             if stream.read_exact(&mut port_buf).await.is_err() {
                 return;
             }
-            let port = u16::from_be_bytes(port_buf);
-            (String::from_utf8_lossy(&domain).to_string(), port)
+            (
+                String::from_utf8_lossy(&domain).to_string(),
+                u16::from_be_bytes(port_buf),
+            )
         }
         _ => return,
     };
 
-    // Open SSH channel
-    match ssh_handle.channel_open_direct_tcpip(&host, port as u32, "127.0.0.1", 0).await {
-        Ok(mut channel) => {
-            // Send success
-            if stream.write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0]).await.is_err() {
+    match ssh_handle
+        .channel_open_direct_tcpip(host, port as u32, "127.0.0.1", 0)
+        .await
+    {
+        Ok(channel) => {
+            if stream
+                .write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0])
+                .await
+                .is_err()
+            {
                 return;
             }
-
-            // Relay data
-            let (mut read_half, mut write_half) = stream.split();
-            
-            tokio::spawn(async move {
-                let mut buf = [0u8; 8192];
-                loop {
-                    match read_half.read(&mut buf).await {
-                        Ok(0) => break,
-                        Ok(n) => {
-                            if channel.data(&buf[..n]).await.is_err() {
-                                break;
-                            }
-                        }
-                        Err(_) => break,
-                    }
-                }
-            });
-
-            loop {
-                match channel.wait().await {
-                    Some(russh::ChannelMsg::Data { data }) => {
-                        if write_half.write_all(&data).await.is_err() {
-                            break;
-                        }
-                    }
-                    Some(russh::ChannelMsg::Eof) | 
-                    Some(russh::ChannelMsg::Close) | None => break,
-                    _ => {}
-                }
-            }
+            let mut channel_stream = channel.into_stream();
+            let _ = tokio::io::copy_bidirectional(&mut stream, &mut channel_stream).await;
         }
         Err(_) => {
-            // Send failure
             let _ = stream.write_all(&[5, 1, 0, 1, 0, 0, 0, 0, 0, 0]).await;
         }
     }
