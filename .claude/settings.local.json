@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(gitcommit --help)",
+      "Read(//tmp/**)",
+      "Bash(gitcommit --message \"📝 Sync CLAUDE.md spec with android v26 — DB v23→v26, Issue #163-#175, QR pairing TODO checklist, accurate build status \\(50 errors verified\\) 📝\")",
+      "Bash(gitcommit -m \"📝 Sync CLAUDE.md spec with android v26 — DB v23→v26, Issue #163-#175, QR pairing TODO checklist, accurate build status \\(50 errors verified\\) 📝\")"
     ]
   }
 }
