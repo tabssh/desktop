@@ -1,235 +1,148 @@
 # TabSSH Desktop
 
-🦀 **Modern SSH/SFTP client built with Rust** - Cross-platform, fast, and secure.
+🦀 **Cross-platform SSH/SFTP client built in Rust** — Linux / macOS / Windows / FreeBSD / OpenBSD / NetBSD on amd64 + arm64.
 
-[![Build](https://img.shields.io/badge/build-passing-brightgreen)]()
 [![License](https://img.shields.io/badge/license-MIT-blue)]()
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)]()
-[![Status](https://img.shields.io/badge/status-core%20complete-success)]()
+[![Status](https://img.shields.io/badge/status-early%20development-yellow)]()
 
-**Desktop companion to [TabSSH Android](../android/)** - Same features, desktop power.
+**Desktop sibling to [TabSSH Android](../android/).** Goal: feature parity with the mobile app where applicable, plus desktop-native conveniences (real `~/.ssh/` access, system tray, native window management, CLI mode, native package distribution).
 
-**Core Status:** ✅ 100% Complete - Full SSH/SFTP client ready for production  
-**Android Sync:** 🔄 45% - Adding cloud sync, universal SSH keys, groups, snippets  
-**Target:** 100% feature parity with Android v1.1.0
+> **Honest status (2026-05-01):** Early development. Does not yet compile cleanly. ~50% feature parity vs the Android app. The "100% complete" claims in older revisions of this file and in `STATUS.md` / `PROGRESS_REPORT.md` / `COMPILATION_STATUS.md` (Dec 2025) were aspirational and have been removed. See [TODO.AI.md](TODO.AI.md) for the live work list and the project tracker file in this directory for the parity matrix.
 
 ---
 
-## 🐳 Prerequisites
+## 🎯 Goal
 
-**IMPORTANT:** Rust is NOT installed locally. ALL builds, tests, and development tasks use Docker.
+Cross-platform desktop SSH/SFTP client with:
 
-- **Docker** - Required for all operations (build, test, development)
-- **Make** - Build automation (runs Docker commands)
-- **Git** - Version control
-
-**Quick Start:**
-```bash
-make build      # Build with Docker → ./binaries
-make test       # Run tests in Docker
-make release    # Release build → ./releases
-make docker     # Build multi-arch Docker image
-```
+- 🦀 **Pure Rust** — memory-safe, fast, concurrent
+- 📦 **Static binaries** — no runtime dependencies (musl on Linux, static MSVC on Windows)
+- 🎨 **Native UI** — egui (lightweight, GPU-accelerated)
+- 🔐 **Security first** — Rust's memory safety + OS keychain integration + host-key TOFU + AES-GCM at rest
+- 🌍 **True cross-platform** — Linux / macOS / Windows / FreeBSD / OpenBSD / NetBSD on amd64 + arm64 (11 binary variants)
+- 🔄 **Mobile interop** — encrypted sync blobs and QR pairing payloads byte-compatible with the Android app
 
 ---
 
-## 🎯 Features
+## 📊 Current state
 
-### ✅ Complete Feature Set (100%)
-- **Browser-style tabs** - Multiple SSH sessions in one window
-- **SSH authentication** - Password, RSA, ECDSA, Ed25519 keys, keyboard-interactive
-- **Host key verification** - MITM attack detection with database storage
-- **Port forwarding** - Local (-L), Remote (-R), Dynamic/SOCKS (-D)
-- **SSH config parser** - Import from ~/.ssh/config with ProxyJump
-- **SFTP browser** - Full file management (upload, download, rename, delete, chmod)
-- **Transfer manager** - Queue, progress tracking, cancel transfers
-- **10+ themes** - Dracula, Nord, Monokai, Gruvbox, One Dark, Tokyo Night, Solarized, etc.
-- **Settings system** - Complete configuration management
-- **Session persistence** - Resume sessions after restart
-- **Terminal emulation** - Full VT100/xterm with 256 colors and true color
-- **Keyboard shortcuts** - All major shortcuts (Ctrl+T, W, Tab, F5, Del, F2, etc)
-- **Context menus** - Right-click menus for tabs, terminal, SFTP, connections
-- **Search** - Find in terminal with regex support
-- **Notifications** - System notifications for events
-- **Credential storage** - OS keychain integration (macOS, Windows, Linux, BSD)
-- **Platform support** - Windows, Linux, macOS, FreeBSD, OpenBSD, NetBSD
-- **Multi-arch** - amd64 and arm64 builds for all platforms
-- **Static binaries** - No runtime dependencies (musl for Linux)
-- **Comprehensive tests** - 15 test suites covering all functionality
-- **CI/CD** - GitHub Actions workflows for automated builds and releases
+| Aspect | Mobile (android) | Desktop (this repo) |
+|---|---|---|
+| Build | ✅ Compiles, ~215 Kotlin files / ~65k LOC | ❌ 50 compile errors verified 2026-05-01 |
+| Database schema | Room v26, 25 forward migrations | rusqlite v1, no migrations yet |
+| Lines of Rust/Kotlin | n/a | ~10k Rust |
+| Feature parity | n/a (it's the reference) | ~50% with several large features stubbed |
+| Tests | active suite | 0 working test files |
+| Distribution | F-Droid + GitHub Releases (planned) | None yet |
 
-### 🔄 Coming from Android v1.1.0 (In Development)
-- **Cloud Sync** - Google Drive + WebDAV with AES-256-GCM encryption (75% priority)
-- **Universal SSH Keys** - OpenSSH, PEM, PKCS#8, PuTTY support + key generation (75% priority)
-- **Connection Groups** - Organize connections in folders (50% priority)
-- **Snippets Library** - Quick command templates with variables (50% priority)
-- **Proxy/Jump Hosts** - SSH through bastion servers (ProxyJump) (50% priority)
-- **Desktop UX** - Ctrl+Scroll font size, Ctrl+Click URLs, pinned connections (25% priority)
+**Honest progress per component:**
 
-See [TODO.AI.md](TODO.AI.md) for detailed roadmap and [CLAUDE.md](CLAUDE.md) for complete specification.
+| Component | Progress | Notes |
+|-----------|----------|-------|
+| Project structure | 100% | Modules / Cargo / Docker / Makefile in place |
+| UI framework (egui) | ~70% | Tab manager + connection list + terminal view; many screens stubbed |
+| Terminal emulation | ~80% | VT100/xterm via `vte`; renderer in egui canvas |
+| SSH core | ~60% | russh-based; password + pubkey work; keyboard-interactive + agent forwarding pending |
+| SFTP | ~20% | Code exists but doesn't compile against russh-sftp 2.1.x — top blocker |
+| Port forwarding | ~50% | -L / -R / -D scaffolded; Handle::clone + stream/channel ownership issues |
+| Storage | ~40% | SQLite schema exists; not used by most code paths |
+| Crypto / keychain | ~10% | Stub; `keyring` integration pending |
+| Platform integration | ~5% | macos.rs/linux.rs/windows.rs/bsd.rs all stubs |
+| Themes | ~10% | One default theme; 23 mobile themes not yet ported |
+| Tests | 0% | No working tests today |
+| Distribution / packaging | 0% | No installers, no published binaries |
 
 ---
 
-## 🚀 Quick Start
+## 🐳 Build prerequisites
 
-### Prerequisites
-- Rust 1.75+ ([install](https://rustup.rs/))
-- Docker (for builds)
-
-### Build
+**Rust is NOT installed locally — all builds happen inside Docker.**
 
 ```bash
-# Clone
-git clone https://github.com/tabssh/desktop
-cd desktop
+# One-time: build the Docker image with the Rust toolchain + GUI deps
+docker build -t tabssh-builder -f docker/Dockerfile .
 
-# Build
-cargo build --release
+# Build for the host
+make build       # → ./binaries/tabssh
 
-# Run
-./target/release/tabssh
+# Release build (multi-target)
+make release     # → ./releases/tabssh-{os}-{arch}
+
+# Tests (when the build is green)
+make test
 ```
 
-### Development
-
-```bash
-# Run in debug mode
-cargo run
-
-# Run tests
-cargo test
-
-# Format and lint
-cargo fmt
-cargo clippy
-```
+The Docker image bundles `rustlang/rust:nightly-bookworm` + GUI dev libraries (libxcb, libxkbcommon, libgtk-3, libgl, etc.) + the `x86_64-unknown-linux-musl` target for static Linux binaries.
 
 ---
 
-## 📦 Installation
-
-### Linux
-
-```bash
-# Build static binary
-make build
-
-# Install
-sudo cp binaries/tabssh-linux-amd64 /usr/local/bin/tabssh
-```
-
-### macOS
-
-```bash
-cargo build --release --target x86_64-apple-darwin
-# or
-cargo build --release --target aarch64-apple-darwin
-```
-
-### Windows
-
-```bash
-cargo build --release --target x86_64-pc-windows-msvc
-```
-
----
-
-## 🎨 Themes
-
-8 built-in themes:
-- Default Dark
-- Dracula
-- Solarized Dark/Light
-- Nord
-- Monokai
-- Gruvbox Dark
-- One Dark
-- Tokyo Night
-
-Switch themes in Settings (Ctrl+,)
-
----
-
-## ⌨️ Keyboard Shortcuts
+## ⌨️ Keyboard shortcuts (planned)
 
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl+T` | New tab |
 | `Ctrl+W` | Close tab |
-| `Ctrl+Tab` | Next tab |
-| `Ctrl+Shift+Tab` | Previous tab |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
+| `Ctrl+1`-`9` | Switch to tab N |
+| `Ctrl+K` | Command palette (Phase 2.1) |
+| `Ctrl+J` | Quick switcher (Phase 2.1) |
+| `Ctrl+R` | History palette (Phase 2.1) |
+| `Ctrl+F` | Find in scrollback (Phase 1.7) |
+| `Ctrl+Click` | Open URL in browser (replaces mobile long-press) |
+| `Ctrl+Scroll` | Font zoom (replaces mobile pinch / volume keys) |
 | `Ctrl+N` | New connection |
 | `Ctrl+,` | Settings |
-| `Ctrl+F` | Find |
-| `Ctrl+Q` | Quit |
-| `Alt+1-9` | Switch to tab N |
 
 ---
 
 ## 🏗️ Architecture
 
-- **Language:** Rust 2021 edition
-- **UI:** egui (immediate-mode GUI)
-- **SSH:** russh (pure Rust SSH2)
-- **Async:** tokio runtime
-- **Database:** SQLite (rusqlite)
-- **Terminal:** Custom VT emulator
+| Layer | Crate / module |
+|---|---|
+| Language | Rust 2021 edition (1.75+) |
+| UI | `egui` + `eframe` |
+| SSH | `russh` 0.40 + `russh-keys` + `russh-sftp` 2.1 |
+| Terminal emulator | `vte` (escape parsing) + custom buffer + egui-canvas renderer |
+| Async runtime | `tokio` (full features) |
+| Storage | `rusqlite` (bundled SQLite) + `serde` + `toml` |
+| Crypto | `aes-gcm`, `argon2`, `pbkdf2`, `ring`, `ed25519-dalek`, `rsa` |
+| Keychain | `keyring` (cross-platform), `security-framework` (macOS), `windows` crate (Windows) |
+| Clipboard | `arboard` (planned) |
+| QR pairing | `qrcodegen`, `ciborium` (planned, Phase 2.8) |
+| Hypervisor APIs | `reqwest` + `tokio-tungstenite` (planned, Phase 2.5) |
 
 ---
 
-## 🧪 Testing
+## 🛣️ Roadmap
 
-```bash
-# All tests
-cargo test
+In dependency order — see [TODO.AI.md](TODO.AI.md) for the full task list and the project tracker for architectural detail.
 
-# Unit tests only
-cargo test --lib
+- **Phase 0** — fix the 50 compile errors (russh-sftp 2.1 API alignment is the bulk)
+- **Phase 1** — Tier-1 SSH-client viability (keyboard-interactive auth, agent forwarding, working SFTP browser, port forwarding, `~/.ssh/config` direct read, universal key parser, in-app key generation, OpenSSH user certificates, multi-tab same-host, find-in-scrollback, 24-bit color)
+- **Phase 2** — Tier-2 desktop-shines features (workspaces, command palette, split view, broadcast input, GUI theme editor, 23 built-in themes, snippets w/ prompt-style variables, hypervisor management, cloud host import, Telnet, recordable macros, **QR pairing — desktop side**, cloud sync byte-compat with mobile)
+- **Phase 3** — Tier-3 polish + platform integration (encrypted ZIP backup, OS keychain integration, system tray, CLI mode, native installers for every supported OS, PIN lock, crash reporter)
+- **Phase 4** — situational (X11 forwarding, pure-Rust Mosh, multi-language, accessibility audits, performance monitor, FIDO2)
+- **Phase 5** — research / speculative (post-quantum, multi-host dashboard, fuzzing)
 
-# Integration tests
-cargo test --test '*'
-
-# With logging
-RUST_LOG=debug cargo test
-```
-
----
-
-## 📊 Project Status
-
-**Completion: 85%+**
-
-| Component | Status |
-|-----------|--------|
-| SSH Core | ✅ 95% |
-| Terminal | ✅ 90% |
-| SFTP | 🚧 60% |
-| Port Forwarding | ✅ 100% |
-| Themes | ✅ 100% |
-| Settings | ✅ 100% |
-| Tests | 🚧 70% |
-| Docs | ✅ 90% |
-
-**9,500+ lines of Rust**
+Out-of-scope items (mobile-only mechanics that don't map to desktop) are listed at the bottom of [TODO.AI.md](TODO.AI.md).
 
 ---
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md)
+See [CONTRIBUTING.md](CONTRIBUTING.md). High-leverage starting points right now:
 
-Areas needing help:
-- SFTP russh integration
-- Cross-platform testing
-- Additional themes
-- Documentation
-- Bug fixes
+- **Phase 0 build fixes** — every contributor starts compiling. The 42-error russh-sftp 2.1 alignment in `src/sftp/client.rs` is the blast-radius reduction job.
+- **Universal SSH key parser** — wrap `ssh-key` crate; mobile has the spec.
+- **23 built-in themes** — copy the JSON definitions from mobile's `BuiltInThemes.kt`.
+- **QR pairing desktop sender** — wire format is fixed (mobile shipped 2026-04-28); spec is in the project tracker.
 
 ---
 
 ## 📝 License
 
-MIT License - See [LICENSE.md](LICENSE.md)
+MIT — see [LICENSE.md](LICENSE.md). Same license as the Android app.
 
 ---
 
@@ -237,16 +150,19 @@ MIT License - See [LICENSE.md](LICENSE.md)
 
 - **Repository:** https://github.com/tabssh/desktop
 - **Issues:** https://github.com/tabssh/desktop/issues
-- **Android Version:** ../android (reference implementation)
+- **Android sibling:** [../android/](../android/) — the reference implementation
+- **Audit / parity matrix:** `../android/FEATURES_AUDIT.md`
+- **Mobile architecture spec:** `../android/AI.md`
 
 ---
 
 ## 🙏 Acknowledgments
 
-- [russh](https://github.com/warp-tech/russh) - SSH implementation
-- [egui](https://github.com/emilk/egui) - Immediate mode GUI
-- [tokio](https://tokio.rs/) - Async runtime
-- Android TabSSH - Original inspiration
+- [russh](https://github.com/warp-tech/russh) — pure-Rust SSH2
+- [russh-sftp](https://crates.io/crates/russh-sftp) — pure-Rust SFTP
+- [egui](https://github.com/emilk/egui) — immediate-mode GUI
+- [tokio](https://tokio.rs/) — async runtime
+- TabSSH Android — original inspiration
 
 ---
 
