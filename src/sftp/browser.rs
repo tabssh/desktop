@@ -178,7 +178,9 @@ mod tests {
             file_type,
             size,
             permissions: 0o644,
-            modified: Utc::now(),
+            modified: Some(Utc::now()),
+            owner: String::new(),
+            group: String::new(),
         }
     }
     
