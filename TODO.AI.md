@@ -1,88 +1,111 @@
 # TabSSH Desktop — Work List
 
 **Last verified:** 2026-05-01
-**Build status:** ❌ Does not compile (50 errors via `cargo check` in `tabssh-builder` docker image)
-**Feature parity vs android:** see the "Comparison with Android Version" matrix in the project tracker — most rows are 🔴 TODO
+**Build status:** ❌ Does not compile (50 errors via `cargo check` in `tabssh-builder` docker image, verified 2026-05-01). In-progress local edits (uncommitted) bring this down to ~7 errors but are not landed.
+**Feature parity vs android:** ~50%. Mobile is at v0.0.9 / DB v26 / 215 Kotlin files / ~65k LOC; desktop is 59 Rust files / ~10k LOC.
 
-This file is the live work list. It supersedes the December 2025 `STATUS.md` / `PROGRESS_REPORT.md` / `COMPILATION_STATUS.md` snapshots, which falsely claimed 75–100% completion when the project did not compile.
+This file is the live work list and is the source of truth for ordering. The companion project tracker holds architectural decisions, the parity matrix, the QR-pairing wire format, the dependency stack, and the build runbook. The two are kept in sync.
+
+The phases below are dependency-ordered: `Phase 0 → Phase 1` is hard (you cannot ship features that don't compile); `Phase 1 → Phase 2 → …` is soft (later phases gain a lot from earlier ones being available, but partial overlap is fine when crates and modules are independent).
 
 ---
 
 ## Phase 0 — get the build green (blocker)
 
-50 errors as of 2026-05-01. Distribution:
+50 compile errors as of 2026-05-01. Distribution and remediation:
 
-| File | Errors | Cause |
-|------|-------:|-------|
-| `src/sftp/client.rs` | 42 | russh-sftp 2.0 API drift — `From<&Cow<'_, str>>` not implemented for `String`, `setstat` removed from `SftpSession`, method-arity mismatches on `read`/`write`/`stat` |
-| `src/ssh/forwarding.rs` | 5 | (audit pending) |
-| `src/sftp/browser.rs` | 3 | `FileType` doesn't impl `Copy` — moves out of shared refs |
-| `src/terminal/emulator.rs` | 3 | (warnings: unused vars; check for real errors too) |
-| `src/ssh/connection.rs` | 2 | (audit pending) |
-| `src/ssh/config_parser.rs` | 2 | (audit pending) |
-| `src/sftp/transfer.rs` | 2 | (audit pending) |
-| `src/sftp/operations.rs` | 2 | (audit pending) |
-| `src/ui/screens/settings_screen.rs` | 2 | (audit pending) |
-| `src/ssh/active_session.rs` | 1 | (audit pending) |
-| `src/ui/keyboard.rs` | 1 | (audit pending) |
-| `src/ui/components.rs` | 1 | (audit pending) |
-| `src/ui/screens/sftp_browser_ui.rs` | 1 | (audit pending) |
+| File | Errors | Cause | Fix |
+|------|-------:|-------|-----|
+| `src/sftp/client.rs` | 42 | russh-sftp 2.0 API drift — `From<&Cow<'_, str>>` not implemented for `String`, `setstat` removed from `SftpSession`, method-arity mismatches on `read`/`write`/`stat`/`close` | russh-sftp 2.1.x: methods are `&self`; `set_metadata(path, FileAttributes)` replaces `setstat`; `read_dir(path)` returns `ReadDir` iterator directly (no separate `open_dir`); `open()`/`create()` return `File` impls of `AsyncRead+AsyncWrite+AsyncSeek` — stream via `tokio::io::AsyncReadExt`/`AsyncWriteExt`; `into_owned()` for `Cow<str>` |
+| `src/ssh/forwarding.rs` | 5 | `russh::client::Handle<H>` doesn't impl `Clone`; `stream` & `channel` move-after-borrow | Take `Arc<Handle<H>>`; replace dual-spawn read/write loops with `channel.into_stream()` + `tokio::io::copy_bidirectional` |
+| `src/sftp/browser.rs` | 3 | `FileType` doesn't impl `Copy` — moves out of shared refs in sort comparator | `#[derive(Copy)]` on the enum |
+| `src/terminal/emulator.rs` | 3 | warnings: unused `cols`/`rows`/`ctx` (look like errors in count, are warnings) | Prefix with `_` or wire up |
+| `src/ssh/connection.rs` | 2 | `check_server_key` trait shape mismatch (russh 0.40 takes `self`, returns `Result<(Self, bool), _>` — not `&mut self -> Result<bool, _>`); `connect_key` arg type mismatch (`&PathBuf` vs `&str`) | Match the new shape; `&path.to_string_lossy()` |
+| `src/ssh/config_parser.rs` | 2 | (audit pending) | |
+| `src/sftp/transfer.rs` | 2 | (audit pending) | Drop the duplicate `TransferDirection`/`TransferStatus` enums; use `crate::sftp::{TransferDirection, TransferState}` |
+| `src/sftp/operations.rs` | 2 | stub TODOs leaving unused vars | Wire to `SftpClient` or delete |
+| `src/ui/screens/settings_screen.rs` | 2 | unused imports + missing `ctx` use | Fix or `_`-prefix |
+| `src/ssh/active_session.rs` | 1 | same `check_server_key` shape issue | Same fix as `connection.rs` |
+| `src/ui/keyboard.rs` | 1 | unused `Modifiers` import | Remove |
+| `src/ui/components.rs` | 1 | f32-from-f64 fallback | `1.0_f32` |
+| `src/ui/screens/sftp_browser_ui.rs` | 1 | unused `ctx` arg | `_ctx` or wire |
 
-**Fix order:**
-1. SFTP client (42 errors) — read russh-sftp 2.0 docs for `SftpSession`. Likely needs `.read_dir()`/`.open()`/`.create()` returning futures of `russh_sftp::client::fs::File`, with `Cow<str>` → `String` via `.into_owned()` not `From`.
-2. `FileType` → derive `Copy` + `Clone` (it's an enum of unit variants, no reason it isn't already).
-3. SSH forwarding/connection/config_parser — likely API drift in russh 0.40 channel/handler API.
-4. Misc UI errors — typically egui 0.25 method renames.
-
-Acceptance: `make build` (which calls `cargo build --release` inside the docker image) exits 0.
+**Acceptance:** `make build` (which calls `cargo build --release` inside the `tabssh-builder` docker image) exits 0.
 
 ---
 
 ## Phase 1 — Tier-1 SSH-client viability
 
-Target: parity on day-to-day SSH features so a power user could daily-drive desktop. Order is dependency-aware.
+Goal: a power user can daily-drive desktop for everyday SSH/SFTP work.
 
-**SSH core:**
-- [ ] Keyboard-interactive auth (russh has it; just wire the prompts → UI dialog)
-- [ ] SSH agent forwarding (russh `agent` feature)
-- [ ] Universal key parser via `ssh-key` crate — OpenSSH v1, PEM (PKCS#1/8), PuTTY v2/v3
-- [ ] In-app key generation: RSA / ECDSA P-256/384/521 / Ed25519 / DSA
-- [ ] OpenSSH user certificate auth (`*-cert.pub`) — `ssh-key` already supports
-- [ ] Per-connection env vars (DB column `env_vars`, sent via `russh::Channel::env`)
+### 1.1 SSH core completeness
+- [ ] Keyboard-interactive auth — wire russh's prompt callback to a UI dialog
+- [ ] SSH agent forwarding — russh's `agent` feature
+- [ ] OpenSSH user certificate auth (`*-cert.pub`) via `ssh-key` crate
+- [ ] Per-connection env vars — DB column `env_vars`, sent via `russh::Channel::env`
 - [ ] Always-on keepalive (60s, count-max 3) — apply unconditionally to every russh session per Issue #166
+- [ ] Centralised connection-error dialog with **Copy** button — clipboard via `arboard` (Issue #167 equivalent)
 
-**SFTP browser:**
+### 1.2 Universal SSH key support
+- [ ] Parse OpenSSH v1 (`-----BEGIN OPENSSH PRIVATE KEY-----`)
+- [ ] Parse PEM (PKCS#1, PKCS#8) — encrypted variants too
+- [ ] Parse PuTTY `.ppk` v2 + v3
+- [ ] In-app key generation: RSA / ECDSA P-256/P-384/P-521 / Ed25519 / DSA (`ed25519-dalek`, `rsa`, `p256`, `p384`, `p521`)
+- [ ] Encrypted-passphrase round-trip (bcrypt KDF for OpenSSH v1)
+- [ ] Export public key (OpenSSH line format)
+- [ ] SHA-256 fingerprint helper
+
+### 1.3 SFTP browser
 - [ ] Get the dual-pane browser working with the fixed `russh-sftp` calls
-- [ ] Remote file editor inline (open → edit in egui textarea → save back)
-- [ ] chmod editor dialog
-- [ ] SCP fallback for servers without SFTP subsystem
+- [ ] Remote file editor inline (open → edit in egui textarea → save back) — Wave 1.7 equivalent
+- [ ] chmod editor dialog — Wave 1.8 equivalent
+- [ ] SCP fallback for servers without the SFTP subsystem — Wave 1.9 equivalent
+- [ ] Drag-and-drop upload from local
+- [ ] Multi-file selection + recursive folder transfer (matches mobile)
+- [ ] Resume interrupted transfers
+- [ ] Permissions display + edit
+- [ ] Symlink handling (display as 🔗, follow on click with confirmation)
 
-**Port forwarding:**
-- [ ] -L (local) — likely already partly done; verify against russh API
+### 1.4 Port forwarding
+- [ ] -L (local) — verify against russh API after Phase 0 rewrite
 - [ ] -R (remote)
-- [ ] -D (dynamic / SOCKS5)
-- [ ] Background tunnels (run forwards without an attached terminal session)
-- [ ] ProxyJump cascading
+- [ ] -D (dynamic / SOCKS5) — already partly written, finalize after Phase 0
+- [ ] Bind-to-all-interfaces option (mobile has it 🆕)
+- [ ] Saved rules per host
+- [ ] Quick start/stop toggle
+- [ ] Background tunnels — run forwards without an attached terminal session (Wave 3.3)
+- [ ] ProxyJump / `connect-via` cascading (multi-hop)
 
-**SSH config:**
-- [ ] Read `~/.ssh/config` directly via `ssh2-config` — don't import a copy, the desktop should reflect the user's existing setup
-- [ ] Round-trip export (write back valid `Host …` blocks)
-- [ ] Bulk import: CSV / JSON / PuTTY .ppk lists
+### 1.5 SSH config
+- [ ] Read `~/.ssh/config` directly via `ssh2-config` — don't import a copy; the desktop should reflect the user's existing setup live
+- [ ] Round-trip export — write back valid `Host …` blocks (Wave 6.1)
+- [ ] Bulk import: CSV / JSON / PuTTY .ppk lists / Terraform host inventories (Waves 1, 6.4/6.5)
+- [ ] Honour `RemoteCommand` (DB v24)
+- [ ] Honour `IPMode` / address family (DB v25)
 
-**Multi-tab + state:**
+### 1.6 Multi-tab + state
 - [ ] Multi-tab same-host independent shells (Issue #163) — per-tab `russh::Channel`, sibling tabs survive when one shell exits
-- [ ] Tmux/Screen/Zellij auto-launch + `postConnectScript` (Issue #170)
-- [ ] Reconnect button on disconnected tab
-- [ ] Active Sessions strip (Issue #165) — top of window, dynamic title via OSC 0/2
+- [ ] Tmux/Screen/Zellij auto-launch + `postConnectScript` (Issue #170) — `multiplexerMode: AUTO_ATTACH | CREATE_NEW`
+- [ ] Reconnect button on disconnected tab — replace auto-close as the only option
+- [ ] Active Sessions strip (Issue #165) — top of window, dynamic title via OSC 0/2, connection-state dot, tap to focus
+- [ ] Resume tabs on app restart (DB `tab_sessions` table)
 
-**Terminal:**
+### 1.7 Terminal experience
 - [ ] Find/search in scrollback (Wave 1)
-- [ ] 24-bit true color (`alacritty_terminal` supports — verify rendering)
-- [ ] Hardware-keyboard modifier-aware nav keys + AltGr (Issue #171) — xterm-style `\e[1;<mod><letter>`
-- [ ] Centralised error dialogs with Copy button (Issue #167) — clipboard via `arboard`
+- [ ] 24-bit true color (Wave 4.a) — `alacritty_terminal` supports; verify rendering
+- [ ] UTF-8 / Unicode handling (`alacritty_terminal` covers)
+- [ ] Configurable scrollback (default 10,000 lines)
+- [ ] Text selection + clipboard integration (`arboard`)
+- [ ] Mouse support (SGR mouse mode)
+- [ ] Alternate screen buffer
+- [ ] Title escape sequences (OSC 0/2/7)
+- [ ] Hardware-keyboard modifier-aware nav keys + AltGr (Issue #171) — xterm-style `\e[1;<mod><letter>` for Shift/Ctrl/Alt + arrows / HOME / END / PG family. AltGr distinguished from real Alt.
+- [ ] URL detection on text — Ctrl+Click → open in browser
+- [ ] Cursor styles (block / beam / underline)
+- [ ] Bell options (audio / visual / silent)
 
-**Build/version:**
-- [ ] Cold-start commit-id marker (Issue #164) — `build.rs` resolves the commit, log on startup once per change
+### 1.8 Build/version plumbing
+- [ ] Cold-start commit-id marker (Issue #164) — `build.rs` resolves the commit via `git rev-parse --short=8`, log on startup once per change. Persist in `~/.config/tabssh/last-commit` so it doesn't spam every cold start. Fall back to `release.txt` then `"unknown"`.
 
 ---
 
@@ -90,80 +113,196 @@ Target: parity on day-to-day SSH features so a power user could daily-drive desk
 
 Where desktop ergonomics genuinely beat mobile.
 
-- [ ] Workspaces (named tab groups, DB v21 equivalent) — desktop can give each its own window
-- [ ] Command palette (Ctrl+K), Quick switcher (Ctrl+J), History palette (Ctrl+R)
-- [ ] Split view (multi-pane terminals in one window)
-- [ ] Broadcast input + cluster commands with live streaming
-- [ ] GUI theme editor — reuse mobile's JSON theme format (kotlinx.serialization is JSON; serde works)
-- [ ] All 23 built-in themes (port `BuiltInThemes.kt` enum table)
-- [ ] Per-host color tags (DB v22 equivalent)
-- [ ] Snippets library + prompt-style variables `{?password}`
+### 2.1 Workspaces & navigation
+- [ ] Workspaces (named tab groups, DB v21 equivalent, Wave 2.5) — desktop can give each its own window
+- [ ] Command palette (Ctrl+K) — Wave 2.6
+- [ ] Quick switcher (Ctrl+J) — Wave 2.6
+- [ ] History palette (Ctrl+R) — Wave 2.10
+- [ ] Split view (multi-pane terminals in one window) — Wave 2.8
+- [ ] Tab reordering (drag-drop)
+
+### 2.2 Multi-host orchestration
+- [ ] Broadcast input (one keystroke → many tabs) — Wave 2.7
+- [ ] Cluster commands with **live result streaming** — Wave 4.e
 - [ ] Identity abstraction (reusable credentials)
 - [ ] Connection groups/folders (DB v3 equivalent — hierarchical)
-- [ ] Hypervisor management — Proxmox VE / XCP-ng / Xen Orchestra (REST + WS) / VMware ESXi/vCenter; `reqwest` + `tokio-tungstenite`
-- [ ] VM serial console via hypervisor API (no VM network needed)
-- [ ] Cloud host import — DigitalOcean / Hetzner / Linode / Vultr (opt-in, tokens in `keyring` not DB)
-- [ ] Telnet protocol (RFC 854)
-- [ ] Recordable macros (Issue #173, DB v26) — capture raw byte sequences
-- [ ] **QR pairing — desktop side** (mobile shipped 2026-04-28). See "QR pairing" section in the project tracker
+- [ ] Per-host color tags (DB v22 equivalent, Wave 3.1)
+- [ ] Group-inherited settings
+
+### 2.3 Themes & visual customization
+- [ ] GUI theme editor (Wave 2.4) — reuse mobile's JSON theme format (`kotlinx.serialization` ↔ `serde` JSON)
+- [ ] All 23 built-in themes (port `BuiltInThemes.kt` enum table — Dracula, Solarized Dark/Light, Nord, One Dark, Monokai, Gruvbox Dark/Light, Tomorrow Night, GitHub Light, Atom One Dark, Material Dark, Tokyo Night/Light, Catppuccin Mocha, Rose Pine, Everforest, Kanagawa, Night Owl, Cobalt2, plus System Default / Dark / Light)
+- [ ] WCAG 2.1 AA/AAA contrast validation (port `ThemeValidator.kt`)
+- [ ] VS Code theme JSON compatibility (port `ThemeParser.kt`)
+- [ ] Per-host theme override
+
+### 2.4 Snippets & automation
+- [ ] Snippets library — DB-backed
+- [ ] Variable placeholders: built-in `{host}`/`{user}`/`{date}` + prompt-style `{?password}` etc.
+- [ ] Categories / tags
+- [ ] One-tap run on session
+- [ ] Run on multiple hosts (cluster snippets)
+- [ ] Macro recorder + replay (Issue #173, DB v26) — capture raw byte sequences (escape codes, paste payloads, modifier-composed Ctrl/Alt); replay verbatim. Distinct from snippets (typed text + variables)
+
+### 2.5 Hypervisor management
+- [ ] Proxmox VE — REST `/api2/json/access/ticket` + termproxy WebSocket (`wss://host:8006/api2/json/.../vncwebsocket`); frame format `"0:LENGTH:MSG"` (data) `"1:COLS:ROWS:"` (resize)
+- [ ] XCP-ng / XenServer — XML-RPC `session.login_with_password` + console WebSocket; detect Xen Orchestra fronting and fall back to XO client
+- [ ] Xen Orchestra — REST + WebSocket; auto-detect `/rest/v6` → `/rest/v5` → `/rest/v0`; `wss://host:port/api/` carries real-time `vm.{started,stopped,…}` / `snapshot.{created,deleted}` / `backup.completed` events; live-updates indicator
+- [ ] VMware ESXi/vCenter — REST `/api/session` + `/api/vcenter/vm`; detect vCenter via `/api/vcenter/datacenter` probe
+- [ ] **VM serial console via hypervisor API** (no VM network needed — works during OS install / for VMs without network) — Wave 7
+- [ ] Snapshot list / create / delete / revert
+- [ ] Backup job list / run / runs / details
+- [ ] HypervisorEditActivity-equivalent CRUD UI
+- [ ] Crates: `reqwest` for HTTP, `tokio-tungstenite` for WS, `serde_json` for REST bodies
+
+### 2.6 Cloud host import (opt-in only)
+- [ ] DigitalOcean — list droplets via API
+- [ ] Hetzner Cloud — list servers via API
+- [ ] Linode — list linodes via API
+- [ ] Vultr — list instances via API
+- [ ] Token storage in `keyring` (per-provider key `cloud_token_${id}`) — never in DB
+- [ ] Refresh on demand; no auto-discovery
+- [ ] `cloud_accounts` table (DB v23 equivalent)
+
+### 2.7 Protocol expansion
+- [ ] Telnet (RFC 854) — Wave 2.3
+- [ ] HTTP/SOCKS proxy (already a config field — finish UI exposure)
+- [ ] Per-connection startup script (post-connect — already covered above in 1.6)
+- [ ] Session log auto-record (`SessionRecorder` equivalent) + `TranscriptViewer`
+
+### 2.8 QR pairing — desktop side
+**Mobile shipped 2026-04-28. Desktop is the SENDER.** Wire format is fixed (mobile won't change). See the project tracker's "QR pairing" section for full spec.
+
+- [ ] Add deps: `qrcodegen`, `ciborium`, `argon2`, `aes-gcm`, `rand`, `base64`
+- [ ] `src/pairing/payload.rs` — `PairingPayload`, `ConnectionProfile` subset (no secrets, no private keys), serde encode
+- [ ] `src/pairing/encrypt.rs` — generate 6-digit code, 16-byte salt, 12-byte nonce; Argon2id (m=64MiB, t=3, p=1) → 32-byte key; AES-256-GCM encrypt; serialise `QrPayload`
+- [ ] `src/pairing/qr.rs` — render `QrPayload` (base64) → QR bitmap via `qrcodegen`, ECC level L, byte mode
+- [ ] `src/ui/pairing_dialog.rs` — egui state machine (`Idle → Selecting → Generating → Active → Expired`) + QR display + 60s countdown
+- [ ] Wire menu entry: File → Pair Phone…
+- [ ] Round-trip test vectors — commit them, mobile reuses
+- [ ] Verify against mobile-side `ImportFromQrActivity` after first build
+
+### 2.9 Cloud sync (filesystem-watch model)
+- [ ] On-disk format byte-identical to mobile's `TABSSH_SYNC_V2` (32-byte header `TABSSH_SYNC_V2` + padding, 32-byte PBKDF2 salt, 12-byte AES-GCM IV, GZIP'd JSON `SyncDataPackage`, 128-bit GCM tag appended)
+- [ ] AES-256-GCM via `aes-gcm` crate, PBKDF2-HMAC-SHA256 100k iterations via `pbkdf2` crate
+- [ ] User points TabSSH at a folder; their existing sync app (Nextcloud / syncthing / rclone / OneDrive / Dropbox) handles transport
+- [ ] Three-way merge with conflict UI — port `MergeEngine` + `ConflictResolver` semantics
+- [ ] Per-entity sync toggles (mobile has 🆕)
+- [ ] WiFi-only equivalent N/A on desktop (always on the LAN); skip
+- [ ] Sync coverage matrix matches mobile: connections / stored_keys / themes / host_keys 3-way; workspaces / snippets / identities / connection_groups / trusted_certificates / hypervisor_profiles last-write-wins; cloud_accounts / tab_sessions / audit_log NOT synced
+- [ ] `notify` crate watches the folder for remote-side changes
+- [ ] Round-trip with mobile: blob written by desktop must decrypt on phone and vice versa (test vectors in both repos)
 
 ---
 
 ## Phase 3 — Tier-3 polish + platform integration
 
+### 3.1 Theming & data export
 - [ ] Theme JSON import/export
-- [ ] Encrypted ZIP backup/restore (compatible with android's BackupManager format)
-- [ ] **Cloud sync — filesystem-watch model** (not SAF):
-  - On-disk format byte-identical to mobile's `TABSSH_SYNC_V2` (32-byte header + 32-byte salt + 12-byte IV + GZIP'd JSON, AES-GCM, PBKDF2-HMAC-SHA256 100k iter, 256-bit key)
-  - User points TabSSH at a folder; their existing sync app (Nextcloud / syncthing / rclone / OneDrive / Dropbox) handles transport
-  - Three-way merge with conflict UI (port `MergeEngine` + `ConflictResolver`)
-  - `notify` crate watches the folder
-- [ ] Platform keychain via `keyring` crate (single API across Linux Secret Service / macOS Keychain / Windows Credential Manager)
-- [ ] System tray (`tray-icon` crate) + auto-launch on login
-- [ ] CLI mode: `tabssh user@host` invocation from shell, falls through to existing GUI tab
-- [ ] Native installers: `.deb`, `.rpm`, AUR `PKGBUILD`, AppImage, `.dmg`, Homebrew formula, `.msi`, WinGet manifest, Scoop bucket, FreeBSD `pkg`/ports, OpenBSD packages, NetBSD `pkgsrc`
+- [ ] Encrypted ZIP backup/restore — compatible with android's `BackupManager` format (`metadata.json`, `connections.json`, `keys.json`, `preferences.json`, `themes.json`, `certificates.json`, `host_keys.json`)
+
+### 3.2 Platform keychain integration
+- [ ] `keyring` crate — single API across Linux Secret Service / macOS Keychain / Windows Credential Manager
+- [ ] BSD fallback: filesystem-encrypted blob in `~/.local/share/tabssh/secrets/` with OS permission lockdown (`0600`)
+- [ ] Master password protection mode (optional — `argon2` to derive a wrap key)
+- [ ] Auto-lock on idle
 - [ ] PIN code app lock (Wave 3.2 equivalent)
-- [ ] Crash reporter via `panic::set_hook` writing to `~/.local/share/tabssh/crashes/`
-- [ ] Settings persistence (most current settings UI is stub)
-- [ ] Connection history view (separate from "last connected")
-- [ ] What's-new / changelog screen on update (read from `release.txt`)
+- [ ] Biometric where available: Touch ID via `security-framework` on macOS, Windows Hello via `windows` crate, Linux fingerprint via PAM (best-effort; not all distros)
+
+### 3.3 OS integration
+- [ ] System tray (`tray-icon` crate) — show running connections, "Connect to…" submenu
+- [ ] Auto-launch on login — `.desktop` autostart on Linux, LaunchAgent plist on macOS, Startup folder shortcut on Windows
+- [ ] CLI mode — `tabssh user@host` invocation from a shell falls through to the GUI tab
+- [ ] Native file-picker integration (`rfd` crate) for SFTP upload/download paths
+
+### 3.4 Distribution & packaging
+Per-OS packaging targets (every line is one task):
+- [ ] `.deb` (Debian/Ubuntu) — `cargo-deb`
+- [ ] `.rpm` (Fedora/RHEL) — `cargo-generate-rpm`
+- [ ] AppImage — Linux universal
+- [ ] Flatpak — sandboxed Linux
+- [ ] Snap — Ubuntu / derivatives
+- [ ] AUR `PKGBUILD` — Arch User Repository
+- [ ] `.dmg` (macOS) — `create-dmg`
+- [ ] Homebrew formula — `brew install tabssh`
+- [ ] MacPorts portfile — `port install tabssh`
+- [ ] `.msi` (Windows) — `cargo-wix`
+- [ ] WinGet manifest — `winget install tabssh`
+- [ ] Chocolatey package — `choco install tabssh`
+- [ ] Scoop bucket — `scoop install tabssh`
+- [ ] FreeBSD `pkg` + ports tree
+- [ ] OpenBSD packages
+- [ ] NetBSD `pkgsrc`
+
+### 3.5 Reliability & observability
+- [ ] Crash reporter via `panic::set_hook` writing to `~/.local/share/tabssh/crashes/{ISO-timestamp}.txt`
+- [ ] Auto-update mechanism (opt-in) — check GitHub Releases, verify SHA-256, download to temp, atomic-replace binary
+- [ ] Log files with rotation (`audit_log_max_size_mb` equivalent) — `tracing-appender`
+- [ ] Audit log of activity (mobile has `AuditLogActivity`) — viewable in-app
+- [ ] Connection history view (separate from "last connected" timestamp)
+- [ ] What's-new / changelog screen on update — read from `release.txt`
 
 ---
 
 ## Phase 4 — situational / lower priority
 
-- [ ] X11 forwarding (`x11rb` crate, real X11 servers — much more useful than mobile's stub)
-- [ ] Mosh — pure-Rust client. Avoid the mobile cross-compile dance for `libmosh-client.so`
-- [ ] Multi-language support (mirror mobile's en/es/fr/de)
-- [ ] Accessibility audits (screen-reader compat — Linux Orca, macOS VoiceOver, Windows Narrator)
-- [ ] Performance monitor with charts (`egui_plot`)
-- [ ] HTTP/SOCKS proxy configuration UI
+- [ ] X11 forwarding (`x11rb` crate, real X11 servers — much more useful than mobile's stub which currently just frameworks the manager)
+- [ ] Mosh — pure-Rust client. Avoid the mobile cross-compile dance for `libmosh-client.so` per-ABI; instead implement the SSP/UDP framing in Rust against the existing mosh server protocol.
+- [ ] Multi-language support (mirror mobile's en / es / fr / de) — `fluent-rs` or `gettext`
+- [ ] Accessibility — screen-reader compat (Linux Orca, macOS VoiceOver, Windows Narrator)
+- [ ] Performance monitor with charts (`egui_plot`) — CPU / RAM / disk / net live polling
+- [ ] FIDO2 / hardware-key SSH auth (YubiKey via USB-HID) — `ctap-hid-fido2` crate
+- [ ] Tab reordering UI (drag-drop already in 2.1; this is the polish on it)
+- [ ] Custom SSH ciphers/MACs UI override (russh defaults are modern; expose for legacy gear)
 
 ---
 
-## Out of scope (where android leads but desktop shouldn't follow)
+## Phase 5 — research / speculative
 
-- Foreground service notification → use system tray
-- SAF document URIs → desktop reads files directly
-- On-screen keyboard customisation → real keyboard always available
-- Volume key bindings, pinch-zoom → use Ctrl+Scroll
-- Swipe gestures → use Ctrl+Tab + mouse
-- ANR watchdog (android-specific) → `panic::set_hook` covers crashes; UI-thread freeze detection is optional polish
-- Tasker integration → use shell scripts / `.desktop` actions
-- Android widget → N/A
-- Foldable layout / sw720dp / book-mode → desktop windows are resizable anyway
-- FLAG_SECURE screenshot protection → desktop OSes don't expose an equivalent universally
-- Cross-platform desktop app (sic) → that IS this project
+These need design work before they become tasks:
+
+- ML-DSA / post-quantum auth — once OpenSSH 9.x post-quantum is widespread (russh tracks JSch on this — JSch 2.27 already supports ML-KEM kex)
+- Multi-host performance dashboard ("rack view")
+- Performance benchmarks for terminal renderer FPS on each platform
+- Fuzzing critical parsers (`cargo-fuzz` against `vte` and ssh-config parsers)
+- Plugin SDK — explicitly REJECTED on mobile ("we ship everything built-in"). Same on desktop unless user-driven need emerges.
+
+---
+
+## Out of scope (mobile leads, desktop shouldn't follow)
+
+| Mobile feature | Why not on desktop |
+|---|---|
+| Foreground service notification | Use system tray |
+| SAF (Storage Access Framework) document URIs | Desktop reads files directly |
+| On-screen keyboard (1-5 customisable rows) | Real keyboard always available |
+| Volume key bindings, pinch-zoom | Use Ctrl+Scroll |
+| Swipe gestures between tabs | Use Ctrl+Tab + mouse |
+| ANR watchdog (android-specific concept) | `panic::set_hook` covers crashes; UI-thread freeze detection is optional polish |
+| Tasker integration | Use shell scripts / `.desktop` actions |
+| Android home-screen widget | N/A |
+| Foldable layout / sw720dp / book-mode | Desktop windows are resizable anyway |
+| FLAG_SECURE screenshot protection | Desktop OSes don't expose an equivalent universally |
+| Custom multi-touch gestures | Desktop uses mouse |
+| Voice typing into terminal | Use OS-level dictation |
+| Shake-to-send-Tab gesture | N/A |
+| Bluetooth keyboard pairing UI | OS handles |
+| Edge-swipe tab switching (Issue #168) | Use Ctrl+Tab |
+| Cross-platform desktop app (sic) | That **is** this project |
 
 ---
 
 ## Acceptance for "in line with android"
 
 Considered done when, for every row in the project tracker's "Comparison with Android Version" matrix:
+
 - ✅ rows show ✅ on the desktop column too, OR
 - 🔴 rows have a tracked TODO above with file paths and crate choices, OR
 - 🚫 rows are explicitly listed in "Out of scope" above with reason
 
-The QR pairing wire format must be byte-compatible with mobile (test vectors checked into both repos).
+Plus interop guarantees:
 
-The cloud sync `TABSSH_SYNC_V2` format must be byte-compatible with mobile (an encrypted blob written by desktop must round-trip through mobile and vice versa).
+- The QR pairing wire format must be **byte-compatible** with mobile (test vectors checked into both repos; mobile-decode of desktop-generated QR succeeds and vice versa).
+- The cloud sync `TABSSH_SYNC_V2` format must be **byte-compatible** with mobile (an encrypted blob written by desktop must round-trip through mobile and vice versa).
+- The encrypted ZIP backup/restore format must be readable on both platforms.
+- The 23 built-in theme JSONs must be byte-identical between platforms (one source of truth in `assets/themes/`).
