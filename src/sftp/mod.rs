@@ -22,16 +22,11 @@ pub use browser::{SftpBrowser, SortColumn};
 pub use operations::SftpOperations;
 pub use transfer::TransferManager;
 
-/// File entry type
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileType {
-    /// Regular file
     File,
-    /// Directory
     Directory,
-    /// Symbolic link
     Symlink,
-    /// Other (device, socket, etc.)
     Other,
 }
 
@@ -46,22 +41,15 @@ impl std::fmt::Display for FileType {
     }
 }
 
-/// Remote file entry
 #[derive(Debug, Clone)]
 pub struct FileEntry {
-    /// File name
     pub name: String,
-    /// File type
+    pub path: std::path::PathBuf,
     pub file_type: FileType,
-    /// File size in bytes
     pub size: u64,
-    /// Last modified timestamp
     pub modified: Option<chrono::DateTime<chrono::Utc>>,
-    /// Unix permissions
     pub permissions: u32,
-    /// Owner name
     pub owner: String,
-    /// Group name
     pub group: String,
 }
 
