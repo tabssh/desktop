@@ -1,16 +1,10 @@
-# TabSSH Desktop — AI Project Specification
+# TabSSH Desktop — Implementation Spec (THE HOW)
 
-> **Audience:** AI coding assistants and human contributors who need an accurate, code-grounded picture of how this project is meant to be built. The repo's project tracker is the operational/runbook document; this file is the architectural ground truth, derived in parallel with the android sibling so the two stay structurally aligned.
+> Paths are repo-relative unless prefixed with `/`. Crate references use the `crate::module` form. "Stub" or "framework only" means the file/struct exists but is not wired into a working user-facing flow — treat as future work. Where this file mentions the android sibling, the path is `../android/<file>`. Mobile is the protocol-and-format reference; desktop must round-trip with mobile for sync blobs and QR pairing payloads.
 >
-> **Generated:** 2026-05-01 from a parallel survey of the desktop sources, the android sibling's `AI.md` (synced 2026-04-25), all Cargo / Docker / Make configuration, and the current `cargo check` output.
+> **Last verified against:** `Cargo.toml` 0.1.0 / russh 0.40.2 / russh-sftp 2.1.1 / egui+eframe 0.25 / vte 0.13 / rusqlite 0.30 (bundled) / Rust nightly base image (`rustlang/rust:nightly-bookworm`) — 2026-05-01.
 >
-> **Last verified against:** `Cargo.toml` version `0.1.0` / russh `0.40.2` / russh-sftp `2.1.1` / egui+eframe `0.25` / vte `0.13` / rusqlite `0.30` (bundled SQLite) / Rust nightly base image (`rustlang/rust:nightly-bookworm`).
->
-> **Format conventions:**
-> - Paths are repo-relative unless prefixed with `/`.
-> - Crate references use the `crate::module` form, the canonical Rust style.
-> - "Stub" or "framework only" means the file/struct exists but is not wired into a working user-facing flow — treat as future work.
-> - Where this file mentions the android sibling, the path is `../android/<file>`. Mobile is the protocol-and-format reference; desktop must round-trip with mobile for sync blobs and QR pairing payloads.
+> See [IDEA.md](IDEA.md) for goals, platform targets, and constraints (THE WHAT).
 
 ---
 
@@ -953,24 +947,19 @@ These exist in source or design but are **not** wired into a working user-facing
 
 ## 17. Editing guidelines for AI agents
 
-When modifying this codebase, follow these rules. Rules are derived from the android sibling's AI.md §17 and adapted to Rust + desktop conventions.
+When modifying this codebase, follow these rules:
 
 1. **Don't reimplement what's there.** `russh` owns the SSH protocol; `vte` + `alacritty_terminal` own escape parsing; `rusqlite` owns persistence; `keyring` owns OS-keychain transport; `notify` owns filesystem events. New features should compose these — not replace them.
 2. **Database changes must ship a migration.** Add a numbered SQL file in `src/storage/migrations/`, bump the schema version, never destructive-drop. The migration file is checked into the repo and tested against an empty DB and the previous-version DB.
-3. **Sync surface is opinionated.** Anything user-visible and persisted that is *not* in `SyncDataCollector` won't sync. If you add a new entity, decide whether to sync it and update `SyncDataCollector` / `SyncDataApplier` / the wire-format coverage matrix in §9.5. Cross-platform sync interop with mobile is a hard requirement, not a nice-to-have.
+3. **Sync surface is opinionated.** Anything user-visible and persisted that is not in `SyncDataCollector` won't sync. If you add a new entity, decide whether to sync it and update `SyncDataCollector` / `SyncDataApplier` / the wire-format coverage matrix in §9.5. Cross-platform sync interop with mobile is a hard requirement, not a nice-to-have.
 4. **Crypto stays at the boundary.** Don't add ad-hoc password storage — use `KeyringStore`. Don't add ad-hoc key parsing — use the `ssh-key` crate via `crypto::keys`. Don't add custom AES code — use `crypto::encryption` (which wraps `aes-gcm`). Don't add custom KDFs — use `crypto::encryption` for PBKDF2 (sync) and `crypto::pairing` for Argon2id (QR pairing).
 5. **Composition over inheritance.** Rust has no inheritance; that's the point. New screens are structs with `render(&mut self, ui: &mut egui::Ui)` impls. Share behaviour via trait impls or composition, never via "extends".
 6. **Use the existing notification categories.** Don't create new ones for one-off events. Three categories: `connection`, `file_transfer`, `error`.
 7. **Keep MSRV at 1.75.** New dependencies must respect it. Nightly features are allowed only inside `#[cfg(nightly)]` and only when there's no stable equivalent; the release build path uses nightly base image but with `--edition 2021` features only.
 8. **Reproducible builds.** Don't introduce non-deterministic generated code. Don't add network-fetching `build.rs` scripts (other than for embedding the git commit ID, which is read once at config time). `SOURCE_DATE_EPOCH` should be honoured by the Docker builder for time-based determinism.
-9. **Prefer `tokio::sync` primitives.** `tokio::sync::watch` for "current value with notification" (the StateFlow analogue), `tokio::sync::mpsc` for command queues, `tokio::sync::RwLock` for shared mutable state. **Don't** introduce alternative async runtimes (async-std, smol) or callback-passing styles. Cross-thread egui updates use `egui::Context::request_repaint()`.
-10. **The project tracker is the runbook, this file is the architecture.** When you change architecture, update this file. When you add a target / script / policy / build instruction, update the project tracker.
-11. **Never add attribution footers** (e.g. `Co-Authored-By:`, "Generated with…" lines) to commit messages. The maintainer authors every commit personally — there is no separate co-author. End the commit body at the last description line; no trailer.
-12. **Save commit messages to `{project_root}/.git/COMMIT_MESS`** (not inline-only, not `/tmp/`). Project convention so the maintainer can `git commit -F .git/COMMIT_MESS` directly. Overwrite the file each time. Then run `gitcommit all` (or the appropriate `gitcommit <subcommand>`); do not pass `-m` — the auto-message generator will override it.
-13. **Match the existing emoji style** in commit messages: leading + trailing emoji like `📝 …text… 📝` or `🗃️ …text… 🗃️`. Choose by intent: 📝 docs, 🗃️ refactor, 🔧 config, 🆕 feature, 🐛 fix, 🚧 WIP.
-14. **Don't bypass hooks** with `--no-verify` / `--no-gpg-sign` / similar. If a hook fails, fix the underlying issue.
-15. **Don't amend pushed commits.** Always create a new commit. Use `gitcommit fixup` for the safe equivalent on the most recent local-only commit.
-16. **Mobile is the protocol reference.** When designing a sync entity, QR pairing payload, or backup format, the android sibling's existing implementation is the spec. Round-trip with the mobile codebase via test vectors before marking the feature done.
+9. **Prefer `tokio::sync` primitives.** `tokio::sync::watch` for "current value with notification" (the StateFlow analogue), `tokio::sync::mpsc` for command queues, `tokio::sync::RwLock` for shared mutable state. Don't introduce alternative async runtimes (async-std, smol) or callback-passing styles. Cross-thread egui updates use `egui::Context::request_repaint()`.
+10. **When you change architecture, update this file.** When you add a target / script / policy / build instruction, update `TODO.AI.md`.
+11. **Mobile is the protocol reference.** When designing a sync entity, QR pairing payload, or backup format, the android sibling's existing implementation is the spec. Round-trip with the mobile codebase via test vectors before marking the feature done.
 
 ---
 
