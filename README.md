@@ -1,169 +1,232 @@
 # TabSSH Desktop
 
-🦀 **Cross-platform SSH/SFTP client built in Rust** — Linux / macOS / Windows / FreeBSD / OpenBSD / NetBSD on amd64 + arm64.
+Cross-platform SSH/SFTP/VNC client for developers and sysadmins. Browser-style tabbed sessions, integrated SFTP, port forwarding, hypervisor management, background host monitoring, and VNC — shipped as a single fully static Rust binary with no runtime dependencies. Desktop sibling to [TabSSH Android](https://github.com/tabssh/android), with byte-compatible sync and QR pairing.
 
-[![License](https://img.shields.io/badge/license-MIT-blue)]()
-[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)]()
-[![Status](https://img.shields.io/badge/status-early%20development-yellow)]()
+[![CI](https://github.com/tabssh/desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/tabssh/desktop/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/tabssh/desktop?label=release)](https://github.com/tabssh/desktop/releases)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE.md)
 
-**Desktop sibling to [TabSSH Android](../android/).** Goal: feature parity with the mobile app where applicable, plus desktop-native conveniences (real `~/.ssh/` access, system tray, native window management, CLI mode, native package distribution).
-
-> **Honest status (2026-05-01):** Early development. Does not yet compile cleanly. ~50% feature parity vs the Android app. The "100% complete" claims in older revisions of this file and in `STATUS.md` / `PROGRESS_REPORT.md` / `COMPILATION_STATUS.md` (Dec 2025) were aspirational and have been removed. See [TODO.AI.md](TODO.AI.md) for the live work list and the project tracker file in this directory for the parity matrix.
+> **Status (2026-06-14):** Early development. Core SSH sessions and terminal emulation are functional; SFTP, hypervisor management, and several UI screens are still in progress. No stable release yet — install from source via Docker.
 
 ---
 
-## 🎯 Goal
+## 📦 Install
 
-Cross-platform desktop SSH/SFTP client with:
+Download the latest release from [GitHub Releases](https://github.com/tabssh/desktop/releases/latest).
 
-- 🦀 **Pure Rust** — memory-safe, fast, concurrent
-- 📦 **Static binaries** — no runtime dependencies (musl on Linux, static MSVC on Windows)
-- 🎨 **Native UI** — egui (lightweight, GPU-accelerated)
-- 🔐 **Security first** — Rust's memory safety + OS keychain integration + host-key TOFU + AES-GCM at rest
-- 🌍 **True cross-platform** — Linux / macOS / Windows / FreeBSD / OpenBSD / NetBSD on amd64 + arm64 (11 binary variants)
-- 🔄 **Mobile interop** — encrypted sync blobs and QR pairing payloads byte-compatible with the Android app
+### Linux
 
----
-
-## 📊 Current state
-
-| Aspect | Mobile (android) | Desktop (this repo) |
-|---|---|---|
-| Build | ✅ Compiles, ~215 Kotlin files / ~65k LOC | ❌ 50 compile errors verified 2026-05-01 |
-| Database schema | Room v26, 25 forward migrations | rusqlite v1, no migrations yet |
-| Lines of Rust/Kotlin | n/a | ~10k Rust |
-| Feature parity | n/a (it's the reference) | ~50% with several large features stubbed |
-| Tests | active suite | 0 working test files |
-| Distribution | F-Droid + GitHub Releases (planned) | None yet |
-
-**Honest progress per component:**
-
-| Component | Progress | Notes |
-|-----------|----------|-------|
-| Project structure | 100% | Modules / Cargo / Docker / Makefile in place |
-| UI framework (egui) | ~70% | Tab manager + connection list + terminal view; many screens stubbed |
-| Terminal emulation | ~80% | VT100/xterm via `vte`; renderer in egui canvas |
-| SSH core | ~60% | russh-based; password + pubkey work; keyboard-interactive + agent forwarding pending |
-| SFTP | ~20% | Code exists but doesn't compile against russh-sftp 2.1.x — top blocker |
-| Port forwarding | ~50% | -L / -R / -D scaffolded; Handle::clone + stream/channel ownership issues |
-| Storage | ~40% | SQLite schema exists; not used by most code paths |
-| Crypto / keychain | ~10% | Stub; `keyring` integration pending |
-| Platform integration | ~5% | macos.rs/linux.rs/windows.rs/bsd.rs all stubs |
-| Themes | ~10% | One default theme; 23 mobile themes not yet ported |
-| Tests | 0% | No working tests today |
-| Distribution / packaging | 0% | No installers, no published binaries |
-
----
-
-## 🐳 Build prerequisites
-
-**Rust is NOT installed locally — all builds happen inside Docker.**
+| Arch | Binary |
+|------|--------|
+| x86\_64 | `tabssh-linux-x86_64` |
+| aarch64 | `tabssh-linux-aarch64` |
 
 ```bash
-# One-time: build the Docker image with the Rust toolchain + GUI deps
-docker build -t tabssh-builder -f docker/Dockerfile .
-
-# Build for the host
-make build       # → ./binaries/tabssh
-
-# Release build (multi-target)
-make release     # → ./releases/tabssh-{os}-{arch}
-
-# Tests (when the build is green)
-make test
+ARCH=$(uname -m)
+curl -LSsf "https://github.com/tabssh/desktop/releases/latest/download/tabssh-linux-${ARCH}" \
+  -o /usr/local/bin/tabssh && chmod +x /usr/local/bin/tabssh
 ```
 
-The Docker image bundles `rustlang/rust:nightly-bookworm` + GUI dev libraries (libxcb, libxkbcommon, libgtk-3, libgl, etc.) + the `x86_64-unknown-linux-musl` target for static Linux binaries.
+### macOS
+
+| Arch | Binary |
+|------|--------|
+| Intel (x86\_64) | `tabssh-macos-x86_64` |
+| Apple Silicon (aarch64) | `tabssh-macos-aarch64` |
+
+```bash
+ARCH=$(uname -m)
+curl -LSsf "https://github.com/tabssh/desktop/releases/latest/download/tabssh-macos-${ARCH}" \
+  -o /usr/local/bin/tabssh && chmod +x /usr/local/bin/tabssh
+xattr -d com.apple.quarantine /usr/local/bin/tabssh 2>/dev/null || true
+```
+
+### Windows
+
+| Arch | Binary |
+|------|--------|
+| x86\_64 | `tabssh-windows-x86_64.exe` |
+| aarch64 | `tabssh-windows-aarch64.exe` |
+
+Download the `.exe` for your architecture and add it to `%PATH%`.
+
+### FreeBSD
+
+| Arch | Binary |
+|------|--------|
+| x86\_64 | `tabssh-freebsd-x86_64` |
+| aarch64 | `tabssh-freebsd-aarch64` |
+
+```bash
+ARCH=$(uname -m)
+fetch -o /usr/local/bin/tabssh \
+  "https://github.com/tabssh/desktop/releases/latest/download/tabssh-freebsd-${ARCH}"
+chmod +x /usr/local/bin/tabssh
+```
+
+### OpenBSD
+
+| Arch | Binary |
+|------|--------|
+| x86\_64 | `tabssh-openbsd-x86_64` |
+| aarch64 | `tabssh-openbsd-aarch64` |
+
+```bash
+ARCH=$(uname -m)
+ftp -o /usr/local/bin/tabssh \
+  "https://github.com/tabssh/desktop/releases/latest/download/tabssh-openbsd-${ARCH}"
+chmod +x /usr/local/bin/tabssh
+```
+
+### NetBSD
+
+| Arch | Binary |
+|------|--------|
+| x86\_64 | `tabssh-netbsd-x86_64` |
+
+```bash
+curl -LSsf "https://github.com/tabssh/desktop/releases/latest/download/tabssh-netbsd-x86_64" \
+  -o /usr/local/bin/tabssh && chmod +x /usr/local/bin/tabssh
+```
 
 ---
 
-## ⌨️ Keyboard shortcuts (planned)
+## 🐳 Docker
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+T` | New tab |
-| `Ctrl+W` | Close tab |
-| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
-| `Ctrl+1`-`9` | Switch to tab N |
-| `Ctrl+K` | Command palette (Phase 2.1) |
-| `Ctrl+J` | Quick switcher (Phase 2.1) |
-| `Ctrl+R` | History palette (Phase 2.1) |
-| `Ctrl+F` | Find in scrollback (Phase 1.7) |
-| `Ctrl+Click` | Open URL in browser (replaces mobile long-press) |
-| `Ctrl+Scroll` | Font zoom (replaces mobile pinch / volume keys) |
-| `Ctrl+N` | New connection |
-| `Ctrl+,` | Settings |
+Run the GUI with X11 forwarding:
 
----
+```bash
+# Clone and start
+git clone https://github.com/tabssh/desktop.git
+cd desktop
 
-## 🏗️ Architecture
+# X11 (Linux)
+xhost +local:docker
+docker compose -f docker/docker-compose.yml up gui
 
-| Layer | Crate / module |
-|---|---|
-| Language | Rust 2021 edition (1.75+) |
-| UI | `egui` + `eframe` |
-| SSH | `russh` 0.40 + `russh-keys` + `russh-sftp` 2.1 |
-| Terminal emulator | `vte` (escape parsing) + custom buffer + egui-canvas renderer |
-| Async runtime | `tokio` (full features) |
-| Storage | `rusqlite` (bundled SQLite) + `serde` + `toml` |
-| Crypto | `aes-gcm`, `argon2`, `pbkdf2`, `ring`, `ed25519-dalek`, `rsa` |
-| Keychain | `keyring` (cross-platform), `security-framework` (macOS), `windows` crate (Windows) |
-| Clipboard | `arboard` (planned) |
-| QR pairing | `qrcodegen`, `ciborium` (planned, Phase 2.8) |
-| Hypervisor APIs | `reqwest` + `tokio-tungstenite` (planned, Phase 2.5) |
+# Wayland
+WAYLAND_DISPLAY=$WAYLAND_DISPLAY docker compose -f docker/docker-compose.yml up gui
+```
 
----
+Build and run the production image locally:
 
-## 🛣️ Roadmap
+```bash
+docker build -f docker/Dockerfile -t tabssh:latest .
+docker run --rm \
+  -e DISPLAY=$DISPLAY \
+  -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
+  tabssh:latest
+```
 
-In dependency order — see [TODO.AI.md](TODO.AI.md) for the full task list and the project tracker for architectural detail.
+Development mode (live source mount, debug binary via `cargo run`):
 
-- **Phase 0** — fix the 50 compile errors (russh-sftp 2.1 API alignment is the bulk)
-- **Phase 1** — Tier-1 SSH-client viability (keyboard-interactive auth, agent forwarding, working SFTP browser, port forwarding, `~/.ssh/config` direct read, universal key parser, in-app key generation, OpenSSH user certificates, multi-tab same-host, find-in-scrollback, 24-bit color)
-- **Phase 2** — Tier-2 desktop-shines features (workspaces, command palette, split view, broadcast input, GUI theme editor, 23 built-in themes, snippets w/ prompt-style variables, hypervisor management, cloud host import, Telnet, recordable macros, **QR pairing — desktop side**, cloud sync byte-compat with mobile)
-- **Phase 3** — Tier-3 polish + platform integration (encrypted ZIP backup, OS keychain integration, system tray, CLI mode, native installers for every supported OS, PIN lock, crash reporter)
-- **Phase 4** — situational (X11 forwarding, pure-Rust Mosh, multi-language, accessibility audits, performance monitor, FIDO2)
-- **Phase 5** — research / speculative (post-quantum, multi-host dashboard, fuzzing)
+```bash
+docker compose -f docker/docker-compose.dev.yml up dev
+```
 
-Out-of-scope items (mobile-only mechanics that don't map to desktop) are listed at the bottom of [TODO.AI.md](TODO.AI.md).
+Run tests:
+
+```bash
+docker compose -f docker/docker-compose.test.yml up test
+```
 
 ---
 
-## 🤝 Contributing
+## 🖥️ CLI
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). High-leverage starting points right now:
+TabSSH ships a CLI mode for quick connections from the shell:
 
-- **Phase 0 build fixes** — every contributor starts compiling. The 42-error russh-sftp 2.1 alignment in `src/sftp/client.rs` is the blast-radius reduction job.
-- **Universal SSH key parser** — wrap `ssh-key` crate; mobile has the spec.
-- **23 built-in themes** — copy the JSON definitions from mobile's `BuiltInThemes.kt`.
-- **QR pairing desktop sender** — wire format is fixed (mobile shipped 2026-04-28); spec is in the project tracker.
+```bash
+# Connect by user@host
+tabssh user@host
 
----
+# Connect by saved profile name
+tabssh --connect "Production DB"
 
-## 📝 License
+# Launch GUI explicitly
+tabssh --ui gui
 
-MIT — see [LICENSE.md](LICENSE.md). Same license as the Android app.
-
----
-
-## 🔗 Links
-
-- **Repository:** https://github.com/tabssh/desktop
-- **Issues:** https://github.com/tabssh/desktop/issues
-- **Android sibling:** [../android/](../android/) — the reference implementation
-- **Audit / parity matrix:** `../android/FEATURES_AUDIT.md`
-- **Mobile architecture spec:** `../android/AI.md`
+# SSH options
+tabssh -p 2222 -i ~/.ssh/id_ed25519 user@host
+```
 
 ---
 
-## 🙏 Acknowledgments
+## 🛠️ Development
 
-- [russh](https://github.com/warp-tech/russh) — pure-Rust SSH2
-- [russh-sftp](https://crates.io/crates/russh-sftp) — pure-Rust SFTP
-- [egui](https://github.com/emilk/egui) — immediate-mode GUI
-- [tokio](https://tokio.rs/) — async runtime
-- TabSSH Android — original inspiration
+**All Rust/Cargo commands run inside Docker — never on the host.**
+
+### Prerequisites
+
+- Docker
+
+### Build
+
+```bash
+# Debug build (x86_64 musl)
+make build
+
+# Release builds (x86_64 + aarch64 musl)
+make release
+
+# Lint (fmt + clippy)
+make check
+
+# Tests
+make test
+
+# Build runtime Docker image
+make docker
+
+# Run GUI with X11 forwarding
+make run-gui
+```
+
+### Make targets
+
+| Target | Description |
+|--------|-------------|
+| `build` | Debug build for `x86_64-unknown-linux-musl` → `binaries/tabssh-linux-x86_64` |
+| `release` | Release builds for both musl targets |
+| `check` | `cargo fmt --check` + `cargo clippy -- -D warnings` |
+| `test` | `cargo test --workspace --all-features` |
+| `docker` | Build the production runtime image |
+| `run-gui` | Run the GUI inside Docker with X11 forwarding |
+| `clean` | Remove `binaries/` and `target/` |
+
+### 🐳 Docker build
+
+All compilation uses `casjaysdev/rust:latest` — no local Rust installation required:
+
+```bash
+# Build multi-arch production image
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -f docker/Dockerfile \
+  -t tabssh:latest \
+  --push .
+```
+
+### Project layout
+
+```
+src/
+├── main.rs          # CLI entry point, --ui gui flag
+├── lib.rs           # public API surface
+├── app.rs           # eframe App implementation
+├── assets.rs        # compile-time asset embedding (themes)
+├── ssh/             # SSH session management (russh)
+├── sftp/            # SFTP browser and transfers
+├── terminal/        # VT100/xterm emulator
+├── ui/              # egui panels and widgets
+├── storage/         # SQLite via rusqlite
+├── crypto/          # AES-GCM, PBKDF2, Argon2id, keychain
+├── config/          # app config, theme structs
+└── platform/        # OS-specific integrations
+```
 
 ---
 
-**Built with 🦀 Rust**
+## 📄 License
+
+MIT — see [LICENSE.md](LICENSE.md)
