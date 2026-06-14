@@ -4,71 +4,95 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
-    
+    container:
+      image: casjaysdev/rust:latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Get version info
-        id: version
-        run: |
-          TAG_NAME=${GITHUB_REF#refs/tags/}
-          VERSION=${TAG_NAME#v}
-          COMMIT=$(git rev-parse --short=8 HEAD)
-          YYMM=$(date "+%y%m")
-          
-          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "COMMIT=$COMMIT" >> $GITHUB_OUTPUT
-          echo "YYMM=$YYMM" >> $GITHUB_OUTPUT
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Build Docker image
-        run: |
-          VERSION=${{ steps.version.outputs.VERSION }}
-          COMMIT=${{ steps.version.outputs.COMMIT }}
-          YYMM=${{ steps.version.outputs.YYMM }}
-          
-          docker build \
-            --tag tabssh-builder:${VERSION} \
-            --tag tabssh-builder:${COMMIT} \
-            --tag tabssh-builder:${YYMM} \
-            --tag tabssh-builder:latest \
-            -f docker/Dockerfile .
-      
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
       - name: Run tests
-        run: |
-          docker run --rm -v $(pwd):/workspace -w /workspace tabssh-builder:latest \
-            cargo test --verbose
-      
-      - name: Build Linux amd64
-        run: |
-          docker run --rm -v $(pwd):/workspace -w /workspace tabssh-builder:latest \
-            cargo build --release --target x86_64-unknown-linux-musl
-          cp target/x86_64-unknown-linux-musl/release/tabssh \
-            tabssh-linux-amd64-${{ steps.version.outputs.VERSION }}
-          strip tabssh-linux-amd64-${{ steps.version.outputs.VERSION }} || true
-      
-      - name: Generate checksums
-        run: sha256sum tabssh-* > checksums-${{ steps.version.outputs.VERSION }}.txt
-      
-      - name: Create source archive
-        run: |
-          tar --exclude-vcs --exclude='./target' --exclude='./binaries' --exclude='./releases' \
-            -czf tabssh-${{ steps.version.outputs.VERSION }}-source.tar.gz .
-      
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        run: cargo test --workspace --all-features
+
+      - name: Compile check (amd64)
+        run: cargo build --release --target x86_64-unknown-linux-musl
+
+      - name: Compile check (arm64)
+        run: cargo build --release --target aarch64-unknown-linux-musl
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    container:
+      image: casjaysdev/rust:latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
         with:
-          files: |
-            tabssh-linux-amd64-${{ steps.version.outputs.VERSION }}
-            tabssh-${{ steps.version.outputs.VERSION }}-source.tar.gz
-            checksums-${{ steps.version.outputs.VERSION }}.txt
+          fetch-depth: 0
+
+      - name: Validate release tag
+        run: |
+          ref="${{ github.ref }}"
+          if [[ "$ref" != refs/tags/* ]]; then
+            echo "::error::release.yml triggered on non-tag ref '$ref'. Releases require a tag push (refs/tags/v...)."
+            exit 1
+          fi
+          tag="${ref#refs/tags/}"
+          if printf '%s' "$tag" | grep -qP '[[:space:][:cntrl:]]'; then
+            echo "::error::Tag '$tag' contains whitespace or control characters and is not a valid tag name."
+            exit 1
+          fi
+          git tag -d "$tag" 2>/dev/null || true
+          git push origin ":refs/tags/$tag" 2>/dev/null || true
+          git tag "$tag"
+          git push origin "refs/tags/$tag"
+          echo "Tag '$tag' ensured at $(git rev-parse HEAD)"
+
+      - name: Build release artifacts
+        run: |
+          mkdir -p dist
+          REPO="${{ github.event.repository.name }}"
+          TAG="${{ github.ref_name }}"
+
+          for TARGET in x86_64-unknown-linux-musl aarch64-unknown-linux-musl; do
+            cargo build --release --target "$TARGET"
+
+            case "$TARGET" in
+              x86_64-unknown-linux-musl)  ARTIFACT="${REPO}-linux-amd64" ;;
+              aarch64-unknown-linux-musl) ARTIFACT="${REPO}-linux-arm64" ;;
+            esac
+
+            cp "target/$TARGET/release/$REPO" "dist/$ARTIFACT"
+            sha256sum "dist/$ARTIFACT" > "dist/$ARTIFACT.sha256"
+
+            ldd "target/$TARGET/release/$REPO" 2>&1 \
+              | grep -qE 'not a dynamic executable|statically linked' \
+              || { echo "::error::$TARGET binary has unexpected dynamic deps"; exit 1; }
+          done
+
+          cargo cyclonedx --format json
+          cp bom.json "dist/${REPO}-bom.json"
+
+          cat dist/*.sha256 > "dist/${REPO}-${TAG}-checksums.txt"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8  # v2.3.2
+        with:
+          files: dist/*
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
