@@ -49,19 +49,71 @@ criterion = "0.5"
 
 [profile.release]
 opt-level = 3
-lto = true
+lto = "fat"
 codegen-units = 1
-strip = true
+strip = "symbols"
 panic = "abort"
 
 [profile.release-small]
 inherits = "release"
 opt-level = "z"
-strip = true
+strip = "symbols"
 
 [[test]]
 name = "ssh_config"
 path = "tests/ssh_config_test.rs"
+
+[[test]]
+name = "connection_flow"
+path = "tests/integration/connection_flow_test.rs"
+
+[[test]]
+name = "full_workflow"
+path = "tests/integration/full_workflow_test.rs"
+
+[[test]]
+name = "port_forwarding"
+path = "tests/integration/port_forwarding_test.rs"
+
+[[test]]
+name = "sftp_integration"
+path = "tests/integration/sftp_test.rs"
+
+[[test]]
+name = "theme_integration"
+path = "tests/integration/theme_integration_test.rs"
+
+[[test]]
+name = "database"
+path = "tests/unit/database_test.rs"
+
+[[test]]
+name = "forwarding_unit"
+path = "tests/unit/forwarding_test.rs"
+
+[[test]]
+name = "helpers"
+path = "tests/unit/helpers_test.rs"
+
+[[test]]
+name = "platform"
+path = "tests/unit/platform_test.rs"
+
+[[test]]
+name = "settings_unit"
+path = "tests/unit/settings_test.rs"
+
+[[test]]
+name = "theme_unit"
+path = "tests/unit/theme_test.rs"
+
+[[test]]
+name = "transfer"
+path = "tests/unit/transfer_test.rs"
+
+[[test]]
+name = "vt_parser"
+path = "tests/unit/vt_parser_test.rs"
 
 [[bench]]
 name = "performance"

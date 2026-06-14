@@ -1441,9 +1441,9 @@ Planned modules (all under `src/`):
 
 These exist in source or design but are **not** wired into a working user-facing flow. Treat them as roadmap items — see `TODO.AI.md` for ordered work.
 
-- **Build is broken.** 50 errors as of 2026-05-01. `src/sftp/client.rs` (russh-sftp 2.1 API drift, 42 errors) is the dominant blocker; `src/ssh/forwarding.rs` (Handle clone + stream/channel ownership, 5 errors), `src/sftp/browser.rs` (FileType not Copy, 3 errors), and `src/ssh/connection.rs` / `active_session.rs` (russh 0.40 `check_server_key` shape, 3 errors) round out the ssh path. See `TODO.AI.md` Phase 0 for the breakdown.
-- **SFTP code exists but doesn't compile.** Once Phase 0 is done, the dual-pane browser + transfer manager are ~80% in place.
-- **Port forwarding is structurally complete but has the same russh 0.40 issues.** The rewrite uses `tokio::io::copy_bidirectional` and `Arc<Handle<H>>` — see uncommitted local edits or `TODO.AI.md` Phase 0.
+- **Build compiles with 0 errors as of 2026-06-13.** All russh 0.40 API drift, SFTP stubs, and orphaned module wiring have been resolved. The library and binary targets both pass `cargo check`.
+- **SFTP client stubs removed.** `src/sftp/operations.rs` was deleted (all 8 methods were TODO stubs). The browser, transfer manager, and client re-exports remain.
+- **Port forwarding is structurally complete.** Uses `tokio::io::copy_bidirectional` and `Arc<Handle<H>>`; compiles cleanly against russh 0.40.
 - **Keyboard-interactive auth, agent forwarding, OpenSSH user certificates** — not yet wired.
 - **Universal SSH key parser, in-app key generation** — placeholders; `ssh-key` crate not yet a dependency.
 - **`~/.ssh/config` direct read** — `config_parser.rs` exists but doesn't yet read in-place from the user's home; that's the desktop-only advantage to land.

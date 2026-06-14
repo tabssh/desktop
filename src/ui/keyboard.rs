@@ -1,6 +1,6 @@
 //! Keyboard shortcut handling
 
-use egui::{Context, Key, Modifiers};
+use egui::{Context, Key};
 
 pub struct KeyboardHandler;
 

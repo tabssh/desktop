@@ -206,7 +206,7 @@ impl<'a> Perform for TerminalPerformer<'a> {
             }
             'r' => {
                 let top = param(0, 1).saturating_sub(1) as usize;
-                let bottom = param(1, self.buffer.size().rows).saturating_sub(1) as usize;
+                let bottom = param(1, self.buffer.size().rows as u16).saturating_sub(1) as usize;
                 self.buffer.set_scroll_region(top, bottom);
             }
             's' => {

@@ -5,9 +5,30 @@
 use eframe::egui::{self, RichText};
 use crate::ui::components::{colors, spacing, primary_button, secondary_button, danger_button,
     labeled_input, labeled_number, labeled_toggle, labeled_dropdown, section_header, card, form_row};
-use super::connection_manager::{ConnectionProfile, AuthType};
 
-/// Authentication method for the form
+/// Authentication type used in a connection profile
+#[derive(Clone, PartialEq)]
+pub enum ProfileAuthType {
+    Password,
+    PublicKey,
+    KeyboardInteractive,
+}
+
+/// Saved connection profile
+#[derive(Clone)]
+pub struct ConnectionProfile {
+    pub id: String,
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub auth_type: ProfileAuthType,
+    pub group: Option<String>,
+    pub last_connected: Option<String>,
+    pub is_favorite: bool,
+}
+
+/// Authentication method for the editor form
 #[derive(Clone, PartialEq)]
 pub enum FormAuthMethod {
     Password,
@@ -29,48 +50,40 @@ impl std::fmt::Display for FormAuthMethod {
 
 /// Connection editor screen state
 pub struct ConnectionEditorScreen {
-    // Basic settings
     pub name: String,
     pub host: String,
     pub port: u16,
     pub username: String,
 
-    // Authentication
     pub auth_method: FormAuthMethod,
     pub password: String,
     pub private_key_path: String,
     pub passphrase: String,
     pub save_password: bool,
 
-    // Advanced SSH options
     pub compression: bool,
     pub keepalive_interval: u16,
     pub connection_timeout: u16,
     pub tcp_keepalive: bool,
 
-    // Terminal settings
     pub terminal_type: String,
     pub initial_command: String,
     pub encoding: String,
 
-    // Forwarding
     pub enable_x11_forwarding: bool,
     pub enable_agent_forwarding: bool,
     pub local_forwards: Vec<PortForward>,
     pub remote_forwards: Vec<PortForward>,
 
-    // Jump host / proxy
     pub use_jump_host: bool,
     pub jump_host: String,
     pub jump_port: u16,
     pub jump_username: String,
 
-    // Organization
     pub group: String,
     pub is_favorite: bool,
     pub notes: String,
 
-    // Edit mode
     pub editing_id: Option<String>,
     pub is_dirty: bool,
 }
@@ -138,9 +151,9 @@ impl ConnectionEditorScreen {
         editor.port = profile.port;
         editor.username = profile.username.clone();
         editor.auth_method = match profile.auth_type {
-            AuthType::Password => FormAuthMethod::Password,
-            AuthType::PublicKey => FormAuthMethod::PublicKey,
-            AuthType::KeyboardInteractive => FormAuthMethod::KeyboardInteractive,
+            ProfileAuthType::Password => FormAuthMethod::Password,
+            ProfileAuthType::PublicKey => FormAuthMethod::PublicKey,
+            ProfileAuthType::KeyboardInteractive => FormAuthMethod::KeyboardInteractive,
         };
         editor.group = profile.group.clone().unwrap_or_default();
         editor.is_favorite = profile.is_favorite;
@@ -174,28 +187,23 @@ impl ConnectionEditorScreen {
 
             ui.add_space(spacing::LG);
 
-            // Basic Settings Section
             section_header(ui, "Basic Settings");
 
             card(ui, |ui| {
                 form_row(ui, |ui| {
                     labeled_input(ui, "Connection Name", &mut self.name, "My Server");
                 });
-
                 form_row(ui, |ui| {
                     labeled_input(ui, "Host", &mut self.host, "example.com or 192.168.1.1");
                 });
-
                 form_row(ui, |ui| {
                     labeled_number(ui, "Port", &mut self.port, 1, 65535);
                 });
-
                 form_row(ui, |ui| {
                     labeled_input(ui, "Username", &mut self.username, "root");
                 });
             });
 
-            // Authentication Section
             section_header(ui, "Authentication");
 
             card(ui, |ui| {
@@ -220,12 +228,11 @@ impl ConnectionEditorScreen {
                                         .text_color(colors::TEXT_PRIMARY)
                                         .password(true)
                                         .desired_width(200.0)
-                                        .margin(egui::Margin::symmetric(8.0, 6.0));
+                                        .margin(egui::vec2(8.0, 6.0));
                                     ui.add(input);
                                 });
                             });
                         });
-
                         form_row(ui, |ui| {
                             labeled_toggle(ui, "Save password in keychain", &mut self.save_password);
                         });
@@ -235,11 +242,10 @@ impl ConnectionEditorScreen {
                             ui.horizontal(|ui| {
                                 labeled_input(ui, "Private Key", &mut self.private_key_path, "~/.ssh/id_ed25519");
                                 if secondary_button(ui, "Browse...").clicked() {
-                                    // TODO: File picker
+                                    log::info!("File picker not yet implemented");
                                 }
                             });
                         });
-
                         form_row(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.label(RichText::new("Passphrase").color(colors::TEXT_PRIMARY));
@@ -249,7 +255,7 @@ impl ConnectionEditorScreen {
                                         .text_color(colors::TEXT_PRIMARY)
                                         .password(true)
                                         .desired_width(200.0)
-                                        .margin(egui::Margin::symmetric(8.0, 6.0));
+                                        .margin(egui::vec2(8.0, 6.0));
                                     ui.add(input);
                                 });
                             });
@@ -261,14 +267,13 @@ impl ConnectionEditorScreen {
                             .size(12.0));
                     }
                     FormAuthMethod::Agent => {
-                        ui.label(RichText::new("SSH Agent will be used for authentication. Make sure your agent is running and has the appropriate key loaded.")
+                        ui.label(RichText::new("SSH Agent will be used for authentication.")
                             .color(colors::TEXT_SECONDARY)
                             .size(12.0));
                     }
                 }
             });
 
-            // Terminal Settings Section
             section_header(ui, "Terminal");
 
             card(ui, |ui| {
@@ -291,11 +296,9 @@ impl ConnectionEditorScreen {
                         });
                     });
                 });
-
                 form_row(ui, |ui| {
                     labeled_input(ui, "Initial Command", &mut self.initial_command, "Optional command to run on connect");
                 });
-
                 form_row(ui, |ui| {
                     let encodings = ["UTF-8", "ISO-8859-1", "GBK", "Big5"];
                     ui.horizontal(|ui| {
@@ -316,38 +319,20 @@ impl ConnectionEditorScreen {
                 });
             });
 
-            // Advanced SSH Options Section
             section_header(ui, "Advanced SSH Options");
 
             card(ui, |ui| {
-                form_row(ui, |ui| {
-                    labeled_toggle(ui, "Enable compression", &mut self.compression);
-                });
-
-                form_row(ui, |ui| {
-                    labeled_toggle(ui, "TCP keep-alive", &mut self.tcp_keepalive);
-                });
-
-                form_row(ui, |ui| {
-                    labeled_number(ui, "Keep-alive interval (seconds)", &mut self.keepalive_interval, 0, 600);
-                });
-
-                form_row(ui, |ui| {
-                    labeled_number(ui, "Connection timeout (seconds)", &mut self.connection_timeout, 5, 300);
-                });
+                form_row(ui, |ui| { labeled_toggle(ui, "Enable compression", &mut self.compression); });
+                form_row(ui, |ui| { labeled_toggle(ui, "TCP keep-alive", &mut self.tcp_keepalive); });
+                form_row(ui, |ui| { labeled_number(ui, "Keep-alive interval (seconds)", &mut self.keepalive_interval, 0, 600); });
+                form_row(ui, |ui| { labeled_number(ui, "Connection timeout (seconds)", &mut self.connection_timeout, 5, 300); });
             });
 
-            // Forwarding Section
             section_header(ui, "Forwarding");
 
             card(ui, |ui| {
-                form_row(ui, |ui| {
-                    labeled_toggle(ui, "Enable X11 forwarding", &mut self.enable_x11_forwarding);
-                });
-
-                form_row(ui, |ui| {
-                    labeled_toggle(ui, "Enable agent forwarding", &mut self.enable_agent_forwarding);
-                });
+                form_row(ui, |ui| { labeled_toggle(ui, "Enable X11 forwarding", &mut self.enable_x11_forwarding); });
+                form_row(ui, |ui| { labeled_toggle(ui, "Enable agent forwarding", &mut self.enable_agent_forwarding); });
 
                 ui.add_space(spacing::SM);
                 ui.label(RichText::new("Port Forwarding").color(colors::TEXT_SECONDARY).size(13.0));
@@ -362,7 +347,6 @@ impl ConnectionEditorScreen {
                             enabled: true,
                         });
                     }
-
                     if secondary_button(ui, "+ Remote Forward").clicked() {
                         self.remote_forwards.push(PortForward {
                             local_port: 8080,
@@ -373,7 +357,6 @@ impl ConnectionEditorScreen {
                     }
                 });
 
-                // Display existing forwards
                 for (i, fwd) in self.local_forwards.clone().iter().enumerate() {
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(format!("L: {}:{}:{}", fwd.local_port, fwd.remote_host, fwd.remote_port))
@@ -395,40 +378,23 @@ impl ConnectionEditorScreen {
                 }
             });
 
-            // Jump Host Section
             section_header(ui, "Jump Host / Proxy");
 
             card(ui, |ui| {
-                form_row(ui, |ui| {
-                    labeled_toggle(ui, "Use jump host (ProxyJump)", &mut self.use_jump_host);
-                });
+                form_row(ui, |ui| { labeled_toggle(ui, "Use jump host (ProxyJump)", &mut self.use_jump_host); });
 
                 if self.use_jump_host {
-                    form_row(ui, |ui| {
-                        labeled_input(ui, "Jump Host", &mut self.jump_host, "bastion.example.com");
-                    });
-
-                    form_row(ui, |ui| {
-                        labeled_number(ui, "Jump Port", &mut self.jump_port, 1, 65535);
-                    });
-
-                    form_row(ui, |ui| {
-                        labeled_input(ui, "Jump Username", &mut self.jump_username, "Same as connection if empty");
-                    });
+                    form_row(ui, |ui| { labeled_input(ui, "Jump Host", &mut self.jump_host, "bastion.example.com"); });
+                    form_row(ui, |ui| { labeled_number(ui, "Jump Port", &mut self.jump_port, 1, 65535); });
+                    form_row(ui, |ui| { labeled_input(ui, "Jump Username", &mut self.jump_username, "Same as connection if empty"); });
                 }
             });
 
-            // Organization Section
             section_header(ui, "Organization");
 
             card(ui, |ui| {
-                form_row(ui, |ui| {
-                    labeled_input(ui, "Group", &mut self.group, "Production, Development, etc.");
-                });
-
-                form_row(ui, |ui| {
-                    labeled_toggle(ui, "Add to favorites", &mut self.is_favorite);
-                });
+                form_row(ui, |ui| { labeled_input(ui, "Group", &mut self.group, "Production, Development, etc."); });
+                form_row(ui, |ui| { labeled_toggle(ui, "Add to favorites", &mut self.is_favorite); });
 
                 ui.add_space(spacing::SM);
                 ui.label(RichText::new("Notes").color(colors::TEXT_PRIMARY));
@@ -461,10 +427,11 @@ impl ConnectionEditorScreen {
             port: self.port,
             username: self.username.clone(),
             auth_type: match self.auth_method {
-                FormAuthMethod::Password => AuthType::Password,
-                FormAuthMethod::PublicKey => AuthType::PublicKey,
-                FormAuthMethod::KeyboardInteractive => AuthType::KeyboardInteractive,
-                FormAuthMethod::Agent => AuthType::PublicKey, // Agent uses public key auth
+                FormAuthMethod::Password => ProfileAuthType::Password,
+                FormAuthMethod::PublicKey => ProfileAuthType::PublicKey,
+                FormAuthMethod::KeyboardInteractive => ProfileAuthType::KeyboardInteractive,
+                // SSH Agent auth is negotiated via public key mechanism
+                FormAuthMethod::Agent => ProfileAuthType::PublicKey,
             },
             group: if self.group.is_empty() { None } else { Some(self.group.clone()) },
             last_connected: None,

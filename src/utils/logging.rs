@@ -13,7 +13,7 @@ pub fn init_logging(level: &str) {
         "error" => LevelFilter::Error,
         _ => LevelFilter::Info,
     };
-    
+
     Builder::new()
         .filter_level(log_level)
         .format(|buf, record| {
@@ -27,18 +27,18 @@ pub fn init_logging(level: &str) {
             )
         })
         .init();
-    
-    log::info!("Logginginitializedat{}level",log_level);
+
+    log::info!("Logging initialized at {} level", log_level);
 }
 
 pub fn log_session_start(host: &str, user: &str) {
-    log::info!("===Sessionstarted:{}@{}===",user,host);
+    log::info!("=== Session started: {}@{} ===", user, host);
 }
 
 pub fn log_session_end(host: &str, duration: std::time::Duration) {
-    log::info!("===Sessionended:{}(duration:{:?})===",host,duration);
+    log::info!("=== Session ended: {} (duration: {:?}) ===", host, duration);
 }
 
 pub fn log_transfer(direction: &str, filename: &str, bytes: u64) {
-    log::info!("{}{}({}bytes)",direction,filename,bytes);
+    log::info!("{} {} ({} bytes)", direction, filename, bytes);
 }

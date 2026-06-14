@@ -1,7 +1,6 @@
 //! TabSSH Desktop - Cross-platform SSH/SFTP client
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-#![allow(dead_code, unused_variables, unused_imports)]  // TODO: Remove after fixing compilation errors
 
 mod app;
 mod config;
@@ -19,22 +18,22 @@ use app::TabSshApp;
 fn main() -> anyhow::Result<()> {
     // Initialize logging
     utils::logging::init_logging("info");
-    
-    log::info!("StartingTabSSHDesktopv{}",env!("CARGO_PKG_VERSION"));
-    
+
+    log::info!("Starting TabSSH Desktop v{}", env!("CARGO_PKG_VERSION"));
+
     // Platform-specific initialization
     #[cfg(target_os = "linux")]
     platform::linux::setup();
-    
+
     #[cfg(target_os = "macos")]
     platform::macos::setup();
-    
+
     #[cfg(target_os = "windows")]
     platform::windows::setup();
-    
+
     #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
     platform::bsd::setup();
-    
+
     // Run application
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -43,11 +42,11 @@ fn main() -> anyhow::Result<()> {
             .with_title("TabSSH Desktop"),
         ..Default::default()
     };
-    
+
     eframe::run_native(
         "TabSSH",
         native_options,
         Box::new(|cc| Box::new(TabSshApp::new(cc))),
     )
-    .map_err(|e| anyhow::anyhow!("Failedtorunapplication:{}",e))
+    .map_err(|e| anyhow::anyhow!("Failed to run application: {}", e))
 }

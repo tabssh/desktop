@@ -43,11 +43,11 @@ impl client::Handler for SessionHandler {
     type Error = anyhow::Error;
 
     async fn check_server_key(
-        &mut self,
+        self,
         server_public_key: &key::PublicKey,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<(Self, bool), Self::Error> {
         log::info!("Server key for {}: {}", self.host, server_public_key.fingerprint());
-        Ok(true)
+        Ok((self, true))
     }
 }
 

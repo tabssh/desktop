@@ -1,7 +1,5 @@
 //! SSH module - SSH connection and session management
 
-#![allow(dead_code)]
-
 mod active_session;
 mod auth;
 mod connection;
@@ -10,9 +8,7 @@ mod forwarding;
 mod session_manager;
 
 pub use active_session::{ActiveSession, SessionEvent};
-#[allow(unused_imports)]
 pub use auth::{Credentials, find_default_keys};
-#[allow(unused_imports)]
 pub use connection::SshConnection;
 pub use config_parser::{SshConfigParser, HostConfig};
 pub use forwarding::{ForwardingManager, PortForward, ForwardType};

@@ -25,11 +25,11 @@ impl client::Handler for TestHandler {
     type Error = anyhow::Error;
 
     async fn check_server_key(
-        &mut self,
+        self,
         server_public_key: &key::PublicKey,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<(Self, bool), Self::Error> {
         println!("Server key fingerprint: {}", server_public_key.fingerprint());
-        Ok(true)
+        Ok((self, true))
     }
 }
 
@@ -182,7 +182,7 @@ fn main() {
             } else {
                 std::path::PathBuf::from(credential)
             };
-            runtime.block_on(run_ssh_test_key(host, port, username, &key_path))
+            runtime.block_on(run_ssh_test_key(host, port, username, key_path.to_str().unwrap_or(credential)))
         }
         _ => {
             eprintln!("Unknown mode: {}. Use -p for password or -k for key auth.", mode);

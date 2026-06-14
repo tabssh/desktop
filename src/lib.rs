@@ -21,5 +21,5 @@ pub use ssh::{
 pub use sftp::{FileEntry, FileType, TransferDirection, TransferState};
 pub use terminal::{TerminalEmulator, VtParser};
 pub use storage::Database;
-pub use config::{Settings, Theme};
+pub use config::{AppConfig, Theme};
 

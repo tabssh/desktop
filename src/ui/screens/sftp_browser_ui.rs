@@ -1,12 +1,11 @@
 //! SFTP browser UI screen
 
-use crate::sftp::{SftpBrowser, SftpOperations, SortColumn};
+use crate::sftp::{SftpBrowser, SortColumn};
 use egui::{Context, Ui};
 use std::path::PathBuf;
 
 pub struct SftpBrowserScreen {
     browser: SftpBrowser,
-    operations: SftpOperations,
     current_path_input: String,
     selected_local_path: Option<PathBuf>,
     transfer_progress: Vec<TransferProgress>,
@@ -23,16 +22,15 @@ impl SftpBrowserScreen {
     pub fn new() -> Self {
         Self {
             browser: SftpBrowser::new(),
-            operations: SftpOperations::new(),
             current_path_input: "/".to_string(),
             selected_local_path: None,
             transfer_progress: Vec::new(),
         }
     }
 
-    pub fn render(&mut self, ctx: &Context, ui: &mut Ui) {
+    pub fn render(&mut self, _ctx: &Context, ui: &mut Ui) {
         ui.heading("SFTP Browser");
-        
+
         // Path navigation bar
         ui.horizontal(|ui| {
             if ui.button("⬆ Up").clicked() {
@@ -40,26 +38,26 @@ impl SftpBrowserScreen {
                     self.current_path_input = path.to_string_lossy().into_owned();
                 }
             }
-            
+
             if ui.button("🏠 Home").clicked() {
                 let path = self.browser.go_home();
                 self.current_path_input = path.to_string_lossy().into_owned();
             }
-            
+
             if ui.button("🔄 Refresh").clicked() {
                 // Trigger directory refresh
             }
-            
+
             ui.separator();
-            
+
             ui.label("Path:");
             if ui.text_edit_singleline(&mut self.current_path_input).lost_focus() {
                 self.browser.change_directory(PathBuf::from(&self.current_path_input));
             }
         });
-        
+
         ui.separator();
-        
+
         // File list header
         ui.horizontal(|ui| {
             if ui.button("Name").clicked() {
@@ -78,18 +76,18 @@ impl SftpBrowserScreen {
                 self.browser.set_sort(SortColumn::Type, true);
             }
         });
-        
+
         ui.separator();
-        
+
         // File list
         egui::ScrollArea::vertical().show(ui, |ui| {
             // Collect entries to avoid borrow checker issues
             let entries: Vec<_> = self.browser.entries().iter().cloned().collect();
             let selected_indices: Vec<_> = self.browser.selected().iter().cloned().collect();
-            
+
             for (idx, entry) in entries.iter().enumerate() {
                 let is_selected = selected_indices.contains(&idx);
-                
+
                 ui.horizontal(|ui| {
                     let icon = match entry.file_type {
                         crate::sftp::FileType::Directory => "📁",
@@ -97,66 +95,66 @@ impl SftpBrowserScreen {
                         crate::sftp::FileType::Symlink => "🔗",
                         crate::sftp::FileType::Other => "❓",
                     };
-                    
-                    let response = ui.selectable_label(is_selected, format!("{}{}",icon,entry.name));
-                    
+
+                    let response = ui.selectable_label(is_selected, format!("{} {}", icon, entry.name));
+
                     if response.clicked() {
                         self.browser.toggle_selection(idx);
                     }
-                    
+
                     if response.double_clicked() {
-                        if matches!(entry.file_type,crate::sftp::FileType::Directory){
+                        if matches!(entry.file_type, crate::sftp::FileType::Directory) {
                             let new_path = self.browser.get_full_path(entry);
                             self.browser.change_directory(new_path.clone());
                             self.current_path_input = new_path.to_string_lossy().into_owned();
                         }
                     }
-                    
+
                     ui.label(format!("{} bytes", entry.size));
-                    
+
                     if let Some(modified) = &entry.modified {
                         ui.label(format!("{}", modified.format("%Y-%m-%d %H:%M")));
                     }
                 });
             }
         });
-        
+
         ui.separator();
-        
+
         // Actions bar
         ui.horizontal(|ui| {
             if ui.button("📥 Download").clicked() {
                 let selected = self.browser.get_selected_entries();
                 for entry in selected {
-                    log::info!("Download:{}",entry.name);
+                    log::info!("Download: {}", entry.name);
                 }
             }
-            
+
             if ui.button("📤 Upload").clicked() {
-                log::info!("Uploadclicked");
+                log::info!("Upload clicked");
             }
-            
+
             if ui.button("🗑 Delete").clicked() {
                 let selected = self.browser.get_selected_entries();
                 for entry in selected {
-                    log::info!("Delete:{}",entry.name);
+                    log::info!("Delete: {}", entry.name);
                 }
             }
-            
+
             if ui.button("📝 Rename").clicked() {
-                log::info!("Renameclicked");
+                log::info!("Rename clicked");
             }
-            
+
             if ui.button("📁 New Folder").clicked() {
-                log::info!("Newfolderclicked");
+                log::info!("New folder clicked");
             }
         });
-        
+
         // Transfer progress
-        if !self.transfer_progress.is_empty(){
+        if !self.transfer_progress.is_empty() {
             ui.separator();
             ui.heading("Transfers");
-            
+
             for transfer in &self.transfer_progress {
                 ui.horizontal(|ui| {
                     ui.label(&transfer.filename);

@@ -80,7 +80,7 @@ impl TerminalRenderer {
         painter.rect_filled(rect, 0.0, Color32::from_rgb(30, 30, 30));
 
         ui.input(|i| {
-            let scroll = i.raw_scroll_delta.y;
+            let scroll = i.scroll_delta.y;
             if scroll != 0.0 {
                 let scroll_lines = (scroll / 20.0).abs() as usize;
                 if scroll > 0.0 {

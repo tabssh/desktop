@@ -113,7 +113,7 @@ impl ForwardingScreen {
                     
                     let desc = match forward.forward_type {
                         ForwardType::Dynamic => {
-                            format!("SOCKSproxyon:{}",forward.listen_port)
+                            format!("SOCKS proxy on: {}", forward.listen_port)
                         }
                         _ => {
                             format!(

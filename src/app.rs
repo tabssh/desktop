@@ -14,16 +14,14 @@ pub struct TabSshApp {
 
 impl TabSshApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // Configure fonts
-        let mut fonts = egui::FontDefinitions::default();
-        // Could load custom fonts here
+        let fonts = egui::FontDefinitions::default();
         cc.egui_ctx.set_fonts(fonts);
-        
+
         let state = AppState::new().unwrap_or_else(|e| {
-            eprintln!("Failedtoinitializeappstate:{}",e);
+            log::error!("Failed to initialize app state: {}", e);
             std::process::exit(1);
         });
-        
+
         Self {
             state,
             tab_bar: TabBar::new(),
@@ -34,12 +32,12 @@ impl TabSshApp {
 }
 
 impl eframe::App for TabSshApp {
-    fn update(&mut self, ctx: &Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         // Handle keyboard shortcuts
         if let Some(action) = KeyboardHandler::handle_shortcuts(ctx) {
             match action {
                 KeyboardAction::NewTab => {
-                    log::info!("Newtab");
+                    log::info!("New tab");
                 }
                 KeyboardAction::CloseTab => {
                     if self.state.active_tab < self.state.tabs.len() {
@@ -53,10 +51,10 @@ impl eframe::App for TabSshApp {
                     self.state.previous_tab();
                 }
                 KeyboardAction::NewConnection => {
-                    log::info!("Newconnection");
+                    log::info!("New connection");
                 }
                 KeyboardAction::OpenSettings => {
-                    log::info!("Opensettings");
+                    log::info!("Open settings");
                 }
                 KeyboardAction::Quit => {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -64,26 +62,19 @@ impl eframe::App for TabSshApp {
                 _ => {}
             }
         }
-        
-        // Top panel - Toolbar
+
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
-            let action = Toolbar::render(ui);
-            // Handle toolbar actions
+            let _action = Toolbar::render(ui);
         });
-        
-        // Top panel - Tabs
+
         egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
-            if let Some(action) = self.tab_bar.render(ui) {
-                // Handle tab actions
-            }
+            let _action = self.tab_bar.render(ui);
         });
-        
-        // Bottom panel - Status bar
+
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             self.status_bar.render(ui);
         });
-        
-        // Central panel - Main content
+
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.state.tabs.is_empty() {
                 ui.vertical_centered(|ui| {
@@ -92,12 +83,10 @@ impl eframe::App for TabSshApp {
                     ui.label("Press Ctrl+N to create a new connection");
                 });
             } else {
-                // Render active tab content
                 ui.label("Tab content here");
             }
         });
-        
-        // Render notifications
+
         self.state.notification_manager.render(ctx);
     }
 }

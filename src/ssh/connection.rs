@@ -292,8 +292,8 @@ pub async fn connect_through_jump_host(
     jump_creds: &Credentials,
     target_host: &str,
     target_port: u16,
-    target_user: &str,
-    target_creds: &Credentials,
+    _target_user: &str,
+    _target_creds: &Credentials,
 ) -> Result<SshConnection> {
     // Connect to jump host first
     let jump_config = ConnectionConfig {
@@ -317,15 +317,15 @@ pub async fn connect_through_jump_host(
     };
     
     // Open direct-tcpip channel through jump host to target
-    let mut channel = jump_conn.handle.channel_open_direct_tcpip(
+    let _channel = jump_conn.handle.channel_open_direct_tcpip(
         target_host,
         target_port as u32,
         "127.0.0.1",
         0,
     ).await?;
-    
-    log::info!("Establishedtunnelthroughjumphostto{}:{}",target_host,target_port);
-    
+
+    log::info!("Established tunnel through jump host to {}:{}", target_host, target_port);
+
     // Now connect to target through the tunnel
     // This would require wrapping the channel as a transport
     // For now, return jump connection as placeholder

@@ -1,6 +1,5 @@
 //! SFTP file browser implementation
 
-use anyhow::Result;
 use std::path::{Path, PathBuf};
 use super::{FileEntry, FileType};
 

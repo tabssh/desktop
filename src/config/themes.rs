@@ -121,7 +121,7 @@ impl ThemeManager {
             if let Ok(theme) = serde_json::from_str::<Theme>(content) {
                 self.themes.push(theme);
             } else {
-                log::warn!("Failedtoparsebundledtheme:{}",name);
+                log::warn!("Failed to parse bundled theme: {}", name);
             }
         }
     }

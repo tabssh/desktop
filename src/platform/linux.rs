@@ -1,5 +1,5 @@
 //! Linux-specific functionality
 
 pub fn setup() {
-    log::info!("Linuxplatforminitialization");
+    log::info!("Linux platform initialization");
 }

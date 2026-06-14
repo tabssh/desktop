@@ -1,8 +1,8 @@
 //! SSH config file parser (~/.ssh/config)
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// SSH config entry for a host
 #[derive(Debug, Clone, Default)]

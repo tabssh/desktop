@@ -7,7 +7,6 @@ pub use themes::Theme;
 use serde::{Deserialize, Serialize};
 
 /// Theme mode selection
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum ThemeMode {
     Dark,
@@ -31,10 +30,9 @@ impl std::fmt::Display for ThemeMode {
     }
 }
 
-/// Application settings
-#[allow(dead_code)]
+/// Application settings loaded from config file (TOML)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Settings {
+pub struct AppConfig {
     /// Theme mode (dark/light/system)
     pub theme_mode: ThemeMode,
 
@@ -75,7 +73,7 @@ pub struct Settings {
     pub keepalive_interval: u32,
 }
 
-impl Default for Settings {
+impl Default for AppConfig {
     fn default() -> Self {
         Self {
             theme_mode: ThemeMode::Dark,
@@ -96,7 +94,6 @@ impl Default for Settings {
 }
 
 /// Cursor style for terminal
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum CursorStyle {
     Block,

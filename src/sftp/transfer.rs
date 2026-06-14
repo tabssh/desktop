@@ -1,7 +1,6 @@
 //! SFTP file transfer management
 
-use anyhow::Result;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

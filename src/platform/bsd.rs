@@ -1,5 +1,5 @@
 //! BSD-specific functionality
 
 pub fn setup() {
-    log::info!("BSDplatforminitialization");
+    log::info!("BSD platform initialization");
 }

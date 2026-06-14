@@ -1,8 +1,6 @@
 //! Professional UI Components Library
 //! Reusable, styled UI widgets for consistent look and feel
 
-#![allow(dead_code)]
-
 use eframe::egui::{self, Color32, RichText, Rounding, Stroke, Vec2};
 
 /// Color palette for the application
@@ -382,4 +380,103 @@ pub fn form_row(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui)) {
 pub fn with_tooltip<R>(ui: &mut egui::Ui, _tooltip: &str, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let response = add_contents(ui);
     response
+}
+
+/// Tab bar widget — displays open session tabs
+pub struct TabBar {
+    tabs: Vec<String>,
+    active: usize,
+}
+
+impl TabBar {
+    pub fn new() -> Self {
+        Self { tabs: Vec::new(), active: 0 }
+    }
+
+    /// Render tabs and return an action if the user interacted
+    pub fn render(&mut self, ui: &mut egui::Ui) -> Option<TabBarAction> {
+        let mut action = None;
+        ui.horizontal(|ui| {
+            for (idx, tab) in self.tabs.iter().enumerate() {
+                let selected = idx == self.active;
+                if ui.selectable_label(selected, tab).clicked() {
+                    self.active = idx;
+                    action = Some(TabBarAction::SelectTab(idx));
+                }
+            }
+            if ui.button("+").clicked() {
+                action = Some(TabBarAction::NewTab);
+            }
+        });
+        action
+    }
+}
+
+impl Default for TabBar {
+    fn default() -> Self { Self::new() }
+}
+
+/// Action emitted by the tab bar
+#[derive(Debug, Clone)]
+pub enum TabBarAction {
+    SelectTab(usize),
+    NewTab,
+    CloseTab(usize),
+}
+
+/// Application toolbar — top action bar
+pub struct Toolbar;
+
+impl Toolbar {
+    /// Render the toolbar and return an action if the user interacted
+    pub fn render(ui: &mut egui::Ui) -> Option<ToolbarAction> {
+        let mut action = None;
+        ui.horizontal(|ui| {
+            if ui.button("➕ New").clicked() {
+                action = Some(ToolbarAction::NewConnection);
+            }
+            if ui.button("⚙ Settings").clicked() {
+                action = Some(ToolbarAction::OpenSettings);
+            }
+        });
+        action
+    }
+}
+
+/// Action emitted by the toolbar
+#[derive(Debug, Clone)]
+pub enum ToolbarAction {
+    NewConnection,
+    OpenSettings,
+}
+
+/// Status bar — bottom informational strip
+pub struct StatusBar {
+    message: Option<String>,
+}
+
+impl StatusBar {
+    pub fn new() -> Self {
+        Self { message: None }
+    }
+
+    /// Update the status message
+    pub fn set_message(&mut self, msg: impl Into<String>) {
+        self.message = Some(msg.into());
+    }
+
+    /// Render the status bar
+    pub fn render(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            if let Some(msg) = &self.message {
+                ui.label(RichText::new(msg).color(colors::TEXT_SECONDARY).size(12.0));
+            } else {
+                ui.label(RichText::new("Ready").color(colors::TEXT_MUTED).size(12.0));
+            }
+        });
+    }
+}
+
+impl Default for StatusBar {
+    fn default() -> Self { Self::new() }
 }

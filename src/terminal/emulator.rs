@@ -1,73 +1,111 @@
-//! Terminal emulator implementation
+//! Terminal emulator - high-level facade over parser, buffer, and renderer
 
-use super::vt::{VtParser, Cell, CellStyle, AnsiColor};
+use eframe::egui;
+use super::buffer::TerminalBuffer;
+use super::parser::TerminalParser;
+use super::renderer::{TerminalRenderer, RendererConfig};
+use super::TerminalSize;
 
-/// Terminal emulator state
+/// Full terminal emulator combining parser, buffer, and renderer
 pub struct TerminalEmulator {
-    /// Terminal title
+    /// VT/ANSI parser and buffer
+    parser: TerminalParser,
+
+    /// Renderer for egui output
+    renderer: TerminalRenderer,
+
+    /// Window title set via OSC sequences
     title: String,
-    /// Scrollback buffer
-    scrollback: Vec<Vec<Cell>>,
-    /// Current cursor row
-    cursor_row: usize,
-    /// Current cursor column
-    cursor_col: usize,
-    /// VT parser
-    parser: VtParser,
 }
 
 impl TerminalEmulator {
-    /// Create new terminal emulator
+    /// Create terminal emulator with default renderer configuration
     pub fn new(cols: usize, rows: usize) -> Self {
+        Self::with_config(cols, rows, 10000, RendererConfig::default())
+    }
+
+    /// Create terminal emulator with explicit configuration and scrollback size
+    pub fn with_config(cols: usize, rows: usize, scrollback_size: usize, config: RendererConfig) -> Self {
         Self {
+            parser: TerminalParser::new(cols as u16, rows as u16, scrollback_size),
+            renderer: TerminalRenderer::new(config),
             title: String::new(),
-            scrollback: Vec::new(),
-            cursor_row: 0,
-            cursor_col: 0,
-            parser: VtParser::new(),
         }
     }
 
-    /// Search in terminal buffer
+    /// Process raw terminal data (VT/ANSI escape sequences and text)
+    pub fn process(&mut self, data: &[u8]) {
+        self.parser.process(data);
+    }
+
+    /// Current terminal dimensions
+    pub fn size(&self) -> TerminalSize {
+        self.parser.buffer().size()
+    }
+
+    /// Resize terminal to new column/row dimensions
+    pub fn resize(&mut self, cols: u16, rows: u16) {
+        self.parser.resize(cols, rows);
+    }
+
+    /// Render terminal contents into an egui Ui
+    pub fn render(&mut self, ui: &mut egui::Ui) {
+        let buffer = self.parser.buffer();
+        self.renderer.render(ui, buffer);
+    }
+
+    /// Borrow the underlying terminal buffer
+    pub fn buffer(&self) -> &TerminalBuffer {
+        self.parser.buffer()
+    }
+
+    /// Scroll display to the most recent output
+    pub fn scroll_to_bottom(&mut self) {
+        let buffer = self.parser.buffer();
+        self.renderer.scroll_to_bottom(buffer);
+    }
+
+    /// Clear the visible screen and reset cursor
+    pub fn clear(&mut self) {
+        self.parser.buffer_mut().clear();
+    }
+
+    /// Search for a pattern in the scrollback buffer
     pub fn search(&self, pattern: &str, case_sensitive: bool) -> Vec<(usize, usize)> {
         let mut matches = Vec::new();
-        let pattern = if case_sensitive {
-            pattern.to_string()
-        } else {
-            pattern.to_lowercase()
-        };
-        
-        for (row_idx, line) in self.scrollback.iter().enumerate() {
-            let text = line.iter().map(|cell| cell.c).collect::<String>();
-            let text = if case_sensitive {
-                text
-            } else {
-                text.to_lowercase()
-            };
-            
-            let mut start = 0;
-            while let Some(pos) = text[start..].find(&pattern) {
-                matches.push((row_idx, start + pos));
-                start += pos + 1;
+        let buf = self.parser.buffer();
+
+        for row_idx in 0..buf.scrollback_len() {
+            if let Some(line) = buf.get_scrollback_row(row_idx) {
+                let text: String = line.iter().map(|cell| cell.character).collect();
+                let haystack = if case_sensitive {
+                    text.clone()
+                } else {
+                    text.to_lowercase()
+                };
+                let needle = if case_sensitive {
+                    pattern.to_string()
+                } else {
+                    pattern.to_lowercase()
+                };
+
+                let mut start = 0;
+                while let Some(pos) = haystack[start..].find(&needle) {
+                    matches.push((row_idx, start + pos));
+                    start += pos + 1;
+                }
             }
         }
-        
+
         matches
     }
 
-    /// Clear terminal
-    pub fn clear(&mut self) {
-        self.scrollback.clear();
-        self.cursor_row = 0;
-        self.cursor_col = 0;
-    }
-
-    /// Get terminal title
+    /// Get the current terminal window title
     pub fn title(&self) -> &str {
         &self.title
     }
 
-    /// Set terminal title
+    /// Set the terminal window title
     pub fn set_title(&mut self, title: String) {
         self.title = title;
     }

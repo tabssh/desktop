@@ -1,7 +1,7 @@
 //! Settings screen UI
 
 use egui::{Context, Ui};
-use crate::storage::settings::{Settings, CursorStyle, BellStyle};
+use crate::storage::settings::Settings;
 
 pub struct SettingsScreen {
     settings: Settings,

@@ -1,5 +1,5 @@
 //! macOS-specific functionality
 
 pub fn setup() {
-    log::info!("macOSplatforminitialization");
+    log::info!("macOS platform initialization");
 }

@@ -54,7 +54,7 @@ pub struct TerminalBuffer {
 
 impl TerminalBuffer {
     pub fn new(cols: u16, rows: u16, max_scrollback: usize) -> Self {
-        let size = TerminalSize { cols, rows };
+        let size = TerminalSize { cols: cols as usize, rows: rows as usize };
         let screen = Self::create_empty_screen(cols as usize, rows as usize);
 
         Self {
@@ -465,7 +465,7 @@ impl TerminalBuffer {
         }
 
         self.screen = new_screen;
-        self.size = TerminalSize { cols, rows };
+        self.size = TerminalSize { cols: new_cols, rows: new_rows };
 
         self.cursor_x = self.cursor_x.min(new_cols.saturating_sub(1));
         self.cursor_y = self.cursor_y.min(new_rows.saturating_sub(1));

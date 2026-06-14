@@ -59,11 +59,11 @@ impl ConnectionListScreen {
             ui.horizontal(|ui| {
                 let is_selected = self.selected_connection.as_deref() == Some(name);
                 
-                if ui.selectable_label(is_selected, format!("🖥{}",name)).clicked(){
+                if ui.selectable_label(is_selected, format!("🖥 {}", name)).clicked() {
                     self.selected_connection = Some(name.to_string());
                 }
-                
-                ui.label(format!("{}@{}:{}",user,host,port));
+
+                ui.label(format!("{}@{}:{}", user, host, port));
                 
                 if ui.small_button("🔌").clicked() {
                     *action = Some(ConnectionAction::Connect(name.to_string()));

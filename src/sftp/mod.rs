@@ -1,13 +1,9 @@
 //! SFTP module - Secure file transfer
 
-#![allow(dead_code)]
-
 mod client;
 mod browser;
-mod operations;
 mod transfer;
 
-#[allow(unused_imports)]
 pub use client::{
     SftpClient,
     TransferTask,
@@ -19,7 +15,6 @@ pub use client::{
 };
 
 pub use browser::{SftpBrowser, SortColumn};
-pub use operations::SftpOperations;
 pub use transfer::TransferManager;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
