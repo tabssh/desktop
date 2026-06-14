@@ -1,0 +1,30 @@
+name: tabssh-test
+
+services:
+  test:
+    image: casjaysdev/rust:latest
+    working_dir: /work
+    environment:
+      - RUST_LOG=debug
+      - RUST_BACKTRACE=1
+    volumes:
+      - ..:/work
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - target-cache:/work/target
+    command: cargo test --workspace --all-features
+
+  coverage:
+    image: casjaysdev/rust:latest
+    working_dir: /work
+    volumes:
+      - ..:/work
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - target-cache:/work/target
+    command: cargo tarpaulin --workspace --all-features --fail-under 60 --timeout 120
+
+volumes:
+  cargo-registry:
+  cargo-git:
+  target-cache:

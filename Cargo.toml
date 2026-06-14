@@ -1,11 +1,13 @@
 [package]
 name = "tabssh"
 version = "0.1.0"
-edition = "2021"
-authors = ["TabSSH Contributors"]
+edition = "2024"
+rust-version = "1.87"
+authors = ["casjay"]
 license = "MIT"
 description = "Cross-platform SSH/SFTP client with browser-style tabs"
 repository = "https://github.com/tabssh/desktop"
+homepage = ""
 
 [dependencies]
 tokio = { version = "1.35", features = ["full"] }
@@ -29,6 +31,7 @@ dirs = "5.0"
 chrono = "0.4"
 uuid = { version = "1.6", features = ["v4", "serde"] }
 shellexpand = "3.1"
+rust-embed = { version = "8", features = ["compression"] }
 
 [lib]
 name = "tabssh"

@@ -1,23 +1,21 @@
 # TabSSH Desktop - Build Automation
 
-.PHONY: build release test docker clean help
+.PHONY: build release test check docker run-gui clean help
 
 # Configuration
 PROJECT := tabssh
 VERSION := $(shell grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
 COMMIT := $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE := $(shell date "+%Y-%m-%d %H:%M:%S")
-YYMM := $(shell date "+%y%m")
-DOCKER_IMAGE := tabssh-builder
-DOCKER_TAG := latest
+DOCKER_IMAGE := casjaysdev/rust:latest
 
 # Docker run command
 DOCKER_RUN := docker run --rm \
-	-v $(PWD):/workspace \
-	-w /workspace \
+	-v $(PWD):/work \
+	-w /work \
 	-e TABSSH_BUILD_COMMIT=$(COMMIT) \
 	-e TABSSH_BUILD_DATE="$(BUILD_DATE)" \
-	$(DOCKER_IMAGE):$(DOCKER_TAG)
+	$(DOCKER_IMAGE)
 
 # Build binaries with Docker → outputs to ./binaries
 build:
@@ -27,22 +25,11 @@ build:
 	@echo ""
 	@mkdir -p binaries
 
-	@# Build Docker image if needed
-	@docker inspect $(DOCKER_IMAGE):$(DOCKER_TAG) >/dev/null 2>&1 || \
-		(echo "Building Docker image..." && \
-		docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f docker/Dockerfile .)
-
-	@# Build for host (native binary)
-	@echo "Building $(PROJECT) (native)..."
-	@$(DOCKER_RUN) cargo build --release
-	@cp target/release/$(PROJECT) binaries/$(PROJECT)
-	@strip binaries/$(PROJECT) 2>/dev/null || true
-
-	@# Build Linux amd64 (static musl)
-	@echo "Building $(PROJECT)-linux-amd64 (musl)..."
+	@# Build Linux x86_64 (static musl)
+	@echo "Building $(PROJECT)-linux-x86_64 (musl)..."
 	@$(DOCKER_RUN) cargo build --release --target x86_64-unknown-linux-musl
-	@cp target/x86_64-unknown-linux-musl/release/$(PROJECT) binaries/$(PROJECT)-linux-amd64
-	@strip binaries/$(PROJECT)-linux-amd64 2>/dev/null || true
+	@cp target/x86_64-unknown-linux-musl/release/$(PROJECT) binaries/$(PROJECT)-linux-x86_64
+	@strip binaries/$(PROJECT)-linux-x86_64 2>/dev/null || true
 
 	@# Generate checksums
 	@echo "Generating checksums..."
@@ -61,22 +48,17 @@ release:
 	@echo ""
 	@mkdir -p releases
 
-	@# Build Docker image if needed
-	@docker inspect $(DOCKER_IMAGE):$(DOCKER_TAG) >/dev/null 2>&1 || \
-		(echo "Building Docker image..." && \
-		docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f docker/Dockerfile .)
-
-	@# Build for host (native binary)
-	@echo "Building $(PROJECT) (native)..."
-	@$(DOCKER_RUN) cargo build --release
-	@cp target/release/$(PROJECT) releases/$(PROJECT)
-	@strip releases/$(PROJECT) 2>/dev/null || true
-
-	@# Build Linux amd64 (static musl)
-	@echo "Building $(PROJECT)-linux-amd64 (musl)..."
+	@# Build Linux x86_64 (static musl)
+	@echo "Building $(PROJECT)-linux-x86_64 (musl)..."
 	@$(DOCKER_RUN) cargo build --release --target x86_64-unknown-linux-musl
-	@cp target/x86_64-unknown-linux-musl/release/$(PROJECT) releases/$(PROJECT)-linux-amd64
-	@strip releases/$(PROJECT)-linux-amd64 2>/dev/null || true
+	@cp target/x86_64-unknown-linux-musl/release/$(PROJECT) releases/$(PROJECT)-linux-x86_64
+	@strip releases/$(PROJECT)-linux-x86_64 2>/dev/null || true
+
+	@# Build Linux aarch64 (static musl)
+	@echo "Building $(PROJECT)-linux-aarch64 (musl)..."
+	@$(DOCKER_RUN) cargo build --release --target aarch64-unknown-linux-musl
+	@cp target/aarch64-unknown-linux-musl/release/$(PROJECT) releases/$(PROJECT)-linux-aarch64
+	@strip releases/$(PROJECT)-linux-aarch64 2>/dev/null || true
 
 	@# Generate checksums
 	@echo "Generating checksums..."
@@ -108,49 +90,30 @@ release:
 # Run tests in Docker
 test:
 	@echo "=== Running tests ==="
-	@docker inspect $(DOCKER_IMAGE):$(DOCKER_TAG) >/dev/null 2>&1 || \
-		docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) -f docker/Dockerfile .
 	@$(DOCKER_RUN) cargo test
 
-# Build Docker image with buildx (multi-arch: amd64, arm64)
-docker:
-	@echo "=== Building Docker image with buildx ==="
-	@echo "Platforms: linux/amd64, linux/arm64"
-	@echo "Tags: :latest :$(VERSION) :$(COMMIT) :$(YYMM)"
-	@echo ""
-	
-	@# Ensure buildx builder exists
-	@docker buildx inspect tabssh-builder >/dev/null 2>&1 || \
-		docker buildx create --name tabssh-builder --use
-	
-	@# Build and push multi-arch image (cannot use --load with multi-platform)
-	docker buildx build \
-		--platform linux/amd64,linux/arm64 \
-		--tag $(DOCKER_IMAGE):latest \
-		--tag $(DOCKER_IMAGE):$(VERSION) \
-		--tag $(DOCKER_IMAGE):$(COMMIT) \
-		--tag $(DOCKER_IMAGE):$(YYMM) \
-		--file docker/Dockerfile \
-		--push \
-		.
-	
-	@echo ""
-	@echo "Built and pushed images:"
-	@echo "  $(DOCKER_IMAGE):latest"
-	@echo "  $(DOCKER_IMAGE):$(VERSION)"
-	@echo "  $(DOCKER_IMAGE):$(COMMIT)"
-	@echo "  $(DOCKER_IMAGE):$(YYMM)"
-	@echo "Platforms: linux/amd64, linux/arm64"
+# Format check and clippy in Docker
+check:
+	@echo "=== Running fmt + clippy ==="
+	@$(DOCKER_RUN) cargo fmt --all --check
+	@$(DOCKER_RUN) cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-# Build Docker image for local use (single platform)
-docker-local:
-	@echo "=== Building local Docker image ==="
-	docker build \
-		--tag $(DOCKER_IMAGE):latest \
-		--tag $(DOCKER_IMAGE):$(VERSION) \
-		--file docker/Dockerfile \
-		.
-	@echo "Built local image: $(DOCKER_IMAGE):latest"
+# Build the runtime Docker image (not the build toolchain — use casjaysdev/rust:latest for that)
+docker:
+	@echo "=== Building runtime Docker image ==="
+	@docker build -f docker/Dockerfile -t $(PROJECT):latest .
+	@echo "Built runtime image: $(PROJECT):latest"
+
+# Run the GUI locally with X11 forwarding
+run-gui:
+	@echo "=== Running $(PROJECT) with X11 forwarding ==="
+	@docker run --rm \
+		-v $(PWD):/work \
+		-w /work \
+		-e DISPLAY=$(DISPLAY) \
+		-v /tmp/.X11-unix:/tmp/.X11-unix \
+		$(DOCKER_IMAGE) \
+		cargo run --release --target x86_64-unknown-linux-musl
 
 # Clean build artifacts
 clean:
@@ -163,12 +126,15 @@ help:
 	@echo "TabSSH Desktop - Build System"
 	@echo ""
 	@echo "Available targets:"
-	@echo "  make build     - Build binaries with Docker → ./binaries"
-	@echo "  make release   - Release build with archive → ./releases"
+	@echo "  make build     - Build binary with Docker → ./binaries (x86_64)"
+	@echo "  make release   - Release build for all arches → ./releases"
 	@echo "  make test      - Run tests in Docker"
-	@echo "  make docker    - Build Docker image (buildx multi-arch: amd64, arm64)"
+	@echo "  make check     - Run cargo fmt --check + clippy in Docker"
+	@echo "  make docker    - Build runtime Docker image"
+	@echo "  make run-gui   - Run GUI with X11 forwarding"
 	@echo "  make clean     - Remove build artifacts"
 	@echo "  make help      - Show this help"
 	@echo ""
+	@echo "Build image:     $(DOCKER_IMAGE)"
 	@echo "Current version: $(VERSION)"
 	@echo "Current commit:  $(COMMIT)"

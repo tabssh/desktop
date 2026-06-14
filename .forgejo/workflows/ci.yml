@@ -55,24 +55,18 @@ jobs:
 
       - name: Verify static linkage
         run: |
-          CRATE_NAME=$(grep '^name' Cargo.toml | head -1 | sed 's/name = "\(.*\)"/\1/')
-          ldd "target/x86_64-unknown-linux-musl/release/${CRATE_NAME}" 2>&1 \
+          ldd target/x86_64-unknown-linux-musl/release/${{ github.event.repository.name }} 2>&1 \
             | grep -qE 'not a dynamic executable|statically linked'
-
-      - name: Get crate name
-        id: crate
-        run: echo "name=$(grep '^name' Cargo.toml | head -1 | sed 's/name = \"\(.*\)\"/\1/')" >> "$GITHUB_OUTPUT"
 
       - name: Stage artifact
         run: |
-          CRATE_NAME=$(grep '^name' Cargo.toml | head -1 | sed 's/name = "\(.*\)"/\1/')
           mkdir -p dist
-          cp "target/x86_64-unknown-linux-musl/release/${CRATE_NAME}" \
-            "dist/${CRATE_NAME}-linux-x86_64"
+          cp target/x86_64-unknown-linux-musl/release/${{ github.event.repository.name }} \
+            dist/${{ github.event.repository.name }}-linux-x86_64
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
-          name: ${{ steps.crate.outputs.name }}-linux-x86_64-${{ github.sha }}
+          name: ${{ github.event.repository.name }}-linux-x86_64-${{ github.sha }}
           path: dist/
           retention-days: 7
 

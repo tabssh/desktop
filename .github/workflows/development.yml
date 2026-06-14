@@ -19,15 +19,20 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
-      - name: Build debug (linux/amd64)
+      - name: Get crate name
+        id: crate
+        run: echo "name=$(grep '^name' Cargo.toml | head -1 | sed 's/name = \"\(.*\)\"/\1/')" >> "$GITHUB_OUTPUT"
+
+      - name: Build debug (linux/x86_64)
         run: |
+          CRATE_NAME=$(grep '^name' Cargo.toml | head -1 | sed 's/name = "\(.*\)"/\1/')
           cargo build --target x86_64-unknown-linux-musl
           mkdir -p dist
-          cp target/x86_64-unknown-linux-musl/debug/${{ github.event.repository.name }} \
-            dist/${{ github.event.repository.name }}-linux-amd64
+          cp "target/x86_64-unknown-linux-musl/debug/${CRATE_NAME}" \
+            "dist/${CRATE_NAME}-linux-x86_64-debug"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
-          name: ${{ github.event.repository.name }}-dev-${{ github.sha }}
+          name: ${{ steps.crate.outputs.name }}-dev-${{ github.sha }}
           path: dist/
           retention-days: 7

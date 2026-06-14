@@ -1,0 +1,14 @@
+{{#each licenses}}
+## {{name}} {{version}}
+
+{{#if repository}}Repository: {{repository}}{{/if}}
+{{#if description}}{{description}}{{/if}}
+
+License: {{license}}
+
+{{#each texts}}
+{{text}}
+
+---
+{{/each}}
+{{/each}}

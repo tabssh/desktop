@@ -1,0 +1,25 @@
+name: tabssh
+
+services:
+  gui:
+    image: tabssh:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      - DISPLAY
+      - WAYLAND_DISPLAY
+      - XDG_RUNTIME_DIR
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ${XDG_RUNTIME_DIR:-/run/user/1000}:${XDG_RUNTIME_DIR:-/run/user/1000}:ro
+      - ${HOME}/.ssh:/home/tabssh/.ssh:ro
+      - tabssh-data:/data
+      - tabssh-config:/config
+    devices:
+      - /dev/dri:/dev/dri
+    network_mode: host
+
+volumes:
+  tabssh-data:
+  tabssh-config:

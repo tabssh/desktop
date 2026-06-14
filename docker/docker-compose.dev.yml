@@ -1,0 +1,28 @@
+name: tabssh-dev
+
+services:
+  dev:
+    image: casjaysdev/rust:latest
+    working_dir: /work
+    environment:
+      - DISPLAY
+      - WAYLAND_DISPLAY
+      - XDG_RUNTIME_DIR
+      - RUST_LOG=debug
+      - RUST_BACKTRACE=1
+    volumes:
+      - ..:/work
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ${XDG_RUNTIME_DIR:-/run/user/1000}:${XDG_RUNTIME_DIR:-/run/user/1000}:ro
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - target-cache:/work/target
+    devices:
+      - /dev/dri:/dev/dri
+    network_mode: host
+    command: cargo run -- --ui gui
+
+volumes:
+  cargo-registry:
+  cargo-git:
+  target-cache:

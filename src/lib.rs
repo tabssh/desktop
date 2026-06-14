@@ -2,6 +2,7 @@
 //!
 //! This library provides the core SSH/SFTP functionality for TabSSH Desktop.
 
+pub mod assets;
 pub mod ssh;
 pub mod sftp;
 pub mod terminal;

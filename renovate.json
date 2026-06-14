@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:base"],
+  "schedule": ["every weekend"],
+  "packageRules": [
+    {
+      "matchManagers": ["cargo"],
+      "automerge": false,
+      "labels": ["dependencies", "rust"]
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "automerge": false,
+      "labels": ["dependencies", "ci"],
+      "pinDigests": true
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "automerge": false,
+      "labels": ["dependencies", "docker"],
+      "pinDigests": true
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"]
+  }
+}

@@ -1,0 +1,23 @@
+# =============================================================================
+# Development Image - tabssh debug mode via cargo run
+# =============================================================================
+FROM casjaysdev/rust:latest
+
+ARG BUILD_DATE
+ARG VCS_REF
+
+RUN apk add --no-cache \
+    libx11 \
+    libxcb \
+    wayland-libs-client \
+    mesa-gl \
+    ttf-dejavu
+
+WORKDIR /work
+
+COPY docker/rootfs/ /
+
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["tini", "--", "/usr/local/bin/entrypoint.sh"]
+CMD ["cargo", "run", "--", "--ui", "gui"]

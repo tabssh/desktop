@@ -56,43 +56,39 @@ jobs:
             echo "::error::Tag '$tag' contains whitespace or control characters and is not a valid tag name."
             exit 1
           fi
-          git tag -d "$tag" 2>/dev/null || true
-          git push origin ":refs/tags/$tag" 2>/dev/null || true
-          git tag "$tag"
-          git push origin "refs/tags/$tag"
-          echo "Tag '$tag' ensured at $(git rev-parse HEAD)"
+          echo "Tag '$tag' validated at $(git rev-parse HEAD)"
 
       - name: Build release artifacts
         run: |
           mkdir -p dist
-          CRATE=$(grep '^name' Cargo.toml | head -1 | sed 's/name = "\(.*\)"/\1/')
+          REPO="${{ github.event.repository.name }}"
           TAG="${{ github.ref_name }}"
 
           for TARGET in x86_64-unknown-linux-musl aarch64-unknown-linux-musl; do
             cargo build --release --target "$TARGET"
 
             case "$TARGET" in
-              x86_64-unknown-linux-musl)  ARTIFACT="${CRATE}-linux-x86_64" ;;
-              aarch64-unknown-linux-musl) ARTIFACT="${CRATE}-linux-aarch64" ;;
+              x86_64-unknown-linux-musl)  ARTIFACT="${REPO}-linux-x86_64" ;;
+              aarch64-unknown-linux-musl) ARTIFACT="${REPO}-linux-aarch64" ;;
             esac
 
-            cp "target/$TARGET/release/$CRATE" "dist/$ARTIFACT"
+            cp "target/$TARGET/release/$REPO" "dist/$ARTIFACT"
             sha256sum "dist/$ARTIFACT" > "dist/$ARTIFACT.sha256"
 
-            ldd "target/$TARGET/release/$CRATE" 2>&1 \
+            ldd "target/$TARGET/release/$REPO" 2>&1 \
               | grep -qE 'not a dynamic executable|statically linked' \
               || { echo "::error::$TARGET binary has unexpected dynamic deps"; exit 1; }
           done
 
           cargo cyclonedx --format json
-          cp bom.json "dist/${CRATE}-bom.json"
+          cp bom.json "dist/${REPO}-bom.json"
 
-          cat dist/*.sha256 > "dist/${CRATE}-${TAG}-checksums.txt"
+          cat dist/*.sha256 > "dist/${REPO}-${TAG}-checksums.txt"
 
-      - name: Create GitHub Release
+      - name: Create Forgejo Release
         uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8  # v2.3.2
         with:
           files: dist/*
           generate_release_notes: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
