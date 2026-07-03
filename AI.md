@@ -48,8 +48,10 @@ Example:
 
     project_name:  notes
     project_org:   casjay
-    internal_name: notes        # FROZEN — set once at first-time setup, never edit
-    internal_org:  casjay       # FROZEN — set once at first-time setup, never edit
+    # FROZEN — set once at first-time setup, never edit
+    internal_name: notes
+    # FROZEN — set once at first-time setup, never edit
+    internal_org:  casjay
     app_name:      Notes
     crate_name:    notes
     official_site: https://notes.example.com
@@ -636,7 +638,7 @@ This list is not exhaustive; treat it as the starting point. When introducing a 
 
 ## Cargo Commands
 
-**All cargo invocations execute inside the project Docker container — never on the host.** The table below shows the *logical* command; the **actual** invocation is wrapped (e.g., `docker compose run --rm dev <cmd>` or `docker run --rm -it --name "{project_name}-XXXX" -v "$PWD":/work -w /work <image> <cmd>`). See "Docker Rule" below.
+**All cargo invocations execute inside the project Docker container — never on the host.** The table below shows the *logical* command; the **actual** invocation is wrapped (e.g., `docker compose run --rm dev <cmd>` or `docker run --rm --name "{project_name}-XXXX" -v "$PWD":/work -w /work <image> <cmd>`). See "Docker Rule" below.
 
 | Logical Command | Purpose |
 |-----------------|---------|
@@ -845,7 +847,7 @@ Every production image MUST satisfy:
 Every `docker run` invocation in this project (CI, scripts, docs, examples) MUST use:
 
 ```bash
-docker run --rm -it \
+docker run --rm \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
   ...
 ```
@@ -887,9 +889,10 @@ GUI and display-aware test runs use the `gui` compose service (or equivalent `do
 **X11 forwarding (host running Xorg or XWayland):**
 
 ```bash
-xhost +SI:localuser:$(id -un)        # grant access to current user only; revoke when done
+# grant access to current user only; revoke when done
+xhost +SI:localuser:$(id -un)
 
-docker run --rm -it \
+docker run --rm \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
   -e DISPLAY="$DISPLAY" \
   -e XAUTHORITY=/tmp/.docker.xauth \
@@ -899,13 +902,14 @@ docker run --rm -it \
   -v "$PWD":/work -w /work \
   "$PROJECT_IMAGE" cargo run -- --ui gui
 
-xhost -SI:localuser:$(id -un)        # revoke after the session
+# revoke after the session
+xhost -SI:localuser:$(id -un)
 ```
 
 **Wayland forwarding (host running a Wayland compositor):**
 
 ```bash
-docker run --rm -it \
+docker run --rm \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
   -e WAYLAND_DISPLAY="$WAYLAND_DISPLAY" \
   -e XDG_RUNTIME_DIR=/tmp/xdg \
@@ -1094,7 +1098,7 @@ All gates execute inside the project Docker container (PART 5 → "Docker Rule")
 ```bash
 # Example (Docker-wrapped) — fails if total coverage < threshold
 THRESHOLD="${COVERAGE_MIN:-60}"
-docker run --rm -it \
+docker run --rm \
   --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
   -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
   cargo tarpaulin --workspace --all-features --fail-under "$THRESHOLD"
@@ -1225,10 +1229,14 @@ jobs:
   release:
     needs: build
     permissions:
-      contents: write      # create GitHub release + upload assets
-      packages: write      # push to ghcr.io
-      id-token: write      # OIDC token for cosign signing
-      attestations: write  # GitHub artifact attestations (SBOM, provenance)
+      # create GitHub release + upload assets
+      contents: write
+      # push to ghcr.io
+      packages: write
+      # OIDC token for cosign signing
+      id-token: write
+      # GitHub artifact attestations (SBOM, provenance)
+      attestations: write
     ...
 ```
 
@@ -1326,7 +1334,8 @@ on:
   push:
   pull_request:
   schedule:
-    - cron: '0 6 * * 1'   # weekly Monday 06:00 UTC
+    # weekly Monday 06:00 UTC
+    - cron: '0 6 * * 1'
 
 permissions:
   contents: read
@@ -1341,12 +1350,14 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
-          fetch-depth: 0   # required: truffleHog needs full history
+          # required: truffleHog needs full history
+          fetch-depth: 0
 
       - name: TruffleHog secret scan
         uses: trufflesecurity/trufflehog@b634fb72d9901a4f942e5b8e4ef5f7ec59c97e7c  # v3.88.2
         with:
-          base: ${{ github.event.before }}   # NEVER use default_branch — it resolves to HEAD post-push and skips the scan
+          # NEVER use default_branch — it resolves to HEAD post-push and skips the scan
+          base: ${{ github.event.before }}
           head: ${{ github.sha }}
           extra_args: --only-verified
 
@@ -1395,7 +1406,7 @@ jobs:
 
 **Per-provider notes:**
 
-- GitLab: `secret-scan` runs as a docker job using `image: trufflesecurity/trufflehog:latest` with `GIT_DEPTH: 0`; `image-scan` uses `image: aquasecurity/trivy:0.70.0`.
+- GitLab: `secret-scan` runs as a docker job using `image: trufflesecurity/trufflehog:latest` with `GIT_DEPTH: 0`; `image-scan` uses `image: aquasec/trivy:0.70.0`.
 - Jenkins: `Security` stage uses `parallel {}`; truffleHog and Trivy each run via `docker.image(...).inside { ... }`.
 - All providers: same gates, same severities, same exit conditions — no weaker subset on any provider.
 
@@ -1435,7 +1446,8 @@ Every `actions/upload-artifact` step MUST set a finite `retention-days`:
   with:
     name: {project_name}-${{ matrix.target }}
     path: dist/
-    retention-days: 7   # release-job artifacts may use up to 30; build-job CI artifacts use 7
+    # release-job artifacts may use up to 30; build-job CI artifacts use 7
+    retention-days: 7
 ```
 
 ```bash
@@ -1443,19 +1455,19 @@ Every `actions/upload-artifact` step MUST set a finite `retention-days`:
 mkdir -p dist
 
 # Run gates inside the image (casjaysdev/rust:latest — all tools pre-installed)
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo fmt --all --check
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo clippy --workspace --all-targets --all-features -- -D warnings
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo test --workspace --all-features
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo doc --workspace --no-deps
+docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo fmt --all --check
+docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo clippy --workspace --all-targets --all-features -- -D warnings
+docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo test --workspace --all-features
+docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo doc --workspace --no-deps
 
 # License + advisory enforcement (PART 11 → "License Compliance")
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
+docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
   cargo deny check licenses advisories bans sources
 
 # Attribution-drift check: regenerate the GENERATED region and compare to committed.
 # The `>` redirection runs on the host shell, capturing the container's stdout
 # into a host-side file (the cwd is bind-mounted at /work, so this is intentional).
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
+docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
   cargo about generate about.hbs > LICENSE.generated.md
 sed -n '/<!-- GENERATED:/,$p' LICENSE.md > LICENSE.committed-generated.md
 diff LICENSE.committed-generated.md LICENSE.generated.md
@@ -1465,7 +1477,7 @@ diff LICENSE.committed-generated.md LICENSE.generated.md
 # is renamed to {project_name}-{platform}-{arch}{.ext} with -musl / vendor / ABI
 # tokens stripped (see PART 2 → "Binary Model").
 for TARGET in x86_64-unknown-linux-musl aarch64-unknown-linux-musl; do
-  docker run --rm -it \
+  docker run --rm \
     --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
     -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
     cargo build --release --target "$TARGET"
@@ -1484,14 +1496,14 @@ for TARGET in x86_64-unknown-linux-musl aarch64-unknown-linux-musl; do
   #   Linux musl     → ldd  (expect "not a dynamic executable" / "statically linked")
   #   Apple darwin   → otool -L (expect only Apple-provided frameworks)
   #   Windows MSVC   → dumpbin /dependents (expect no MSVC runtime DLLs)
-  docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
+  docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
     sh -c "ldd target/$TARGET/release/{project_name} 2>&1 | grep -qE 'not a dynamic executable|statically linked'"
 done
 
 # Generate the SBOM (CycloneDX) — published alongside the release artifacts.
 # `cargo cyclonedx --format json` writes `bom.json` next to Cargo.toml; rename
 # into dist/ for inclusion in the release.
-docker run --rm -it --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
+docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
   cargo cyclonedx --format json
 cp bom.json "dist/{project_name}-bom.json"
 ```
@@ -1518,7 +1530,8 @@ The `release` job already has `contents: write` to push assets — this covers t
 ```yaml
 - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
   with:
-    fetch-depth: 0   # required: full history needed to inspect and push tags
+    # required: full history needed to inspect and push tags
+    fetch-depth: 0
 
 - name: Ensure release tag
   run: |
@@ -1708,12 +1721,16 @@ Every workspace member's `Cargo.toml` MUST include:
 
 ```toml
 [package]
-edition      = "2024"       # current stable Rust edition declared in Cargo.toml (PART 5 → "Toolchain Rules")
-rust-version = "1.XX"       # MSRV pin matching rust-toolchain.toml (PART 5 → "Toolchain Image")
-license      = "MIT"        # or the SPDX expression for the IDEA.md-declared license
+# current stable Rust edition declared in Cargo.toml (PART 5 → "Toolchain Rules")
+edition      = "2024"
+# MSRV pin matching rust-toolchain.toml (PART 5 → "Toolchain Image")
+rust-version = "1.XX"
+# or the SPDX expression for the IDEA.md-declared license
+license      = "MIT"
 authors      = ["…"]
 repository   = "…"
-homepage     = "…"          # follows the official-site precedence chain in PART 6 → "Metadata Priority Rules / Official Site": site.txt > IDEA.md `official_site` > documented env override > empty
+# follows the official-site precedence chain in PART 6 → "Metadata Priority Rules / Official Site": site.txt > IDEA.md `official_site` > documented env override > empty
+homepage     = "…"
 description  = "…"
 ```
 
@@ -1921,8 +1938,10 @@ solves. Free-form prose, 1–3 paragraphs.}
 
 project_name:     {project_name}
 project_org:      {project_org}
-internal_name:    {project_name}        # FROZEN — equals project_name on first install, never changes
-internal_org:     {project_org}         # FROZEN — equals project_org on first install, never changes
+# FROZEN — equals project_name on first install, never changes
+internal_name:    {project_name}
+# FROZEN — equals project_org on first install, never changes
+internal_org:     {project_org}
 app_name:         {App Display Name}
 crate_name:       {project_name}
 official_site:    {full URL with scheme, e.g., https://example.com — or empty}
