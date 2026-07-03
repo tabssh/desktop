@@ -7,7 +7,7 @@ PROJECT := tabssh
 VERSION := $(shell grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
 COMMIT := $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE := $(shell date "+%Y-%m-%d %H:%M:%S")
-DOCKER_IMAGE := casjaysdev/rust:latest
+DOCKER_IMAGE ?= rust:alpine
 
 # Docker run command
 DOCKER_RUN := docker run --rm \

@@ -4,17 +4,53 @@ TabSSH Desktop is a cross-platform SSH/SFTP/VNC client for Windows, Linux, macOS
 
 ## Project variables
 
-project_name: desktop
-project_org: tabssh
-internal_name: tabssh
-internal_org: tabssh
-display_name: TabSSH Desktop
-crate_name: tabssh
-android_sibling: ../android
-license: MIT
-repo: https://github.com/tabssh/desktop
+project_name:     desktop
+project_org:      tabssh
+# FROZEN — set once at first-time setup, never edit
+internal_name:    tabssh
+# FROZEN — set once at first-time setup, never edit
+internal_org:     tabssh
+app_name:         TabSSH Desktop
+crate_name:       tabssh
+official_site:
+maintainer_name:  casjay
+maintainer_email: casjay@yahoo.com
+android_sibling:  ../android
+license:          MIT
+repo:             https://github.com/tabssh/desktop
 
 ## Business logic
+
+**Target users:**
+- Developers and sysadmins managing fleets of Linux/BSD servers
+- DevOps engineers who need SSH, SFTP, port forwarding, hypervisor consoles, and host monitoring in one tool
+- Power users migrating from PuTTY, SecureCRT, or the TabSSH Android app to a desktop client
+
+**Surfaces (PART 2 → "GUI/TUI/CLI Capability Rule"):**
+- GUI: yes — egui-based native GUI; primary interactive surface on Linux X11+Wayland, macOS, and Windows
+- TUI: no
+- CLI: yes — `tabssh user@host` and `tabssh --connect <profile>` for shell invocation
+
+**Outbound network use (PART 9 → "Security-First Design"):**
+- SSH/Telnet to user-configured hosts (RFC 4251–4254, RFC 854)
+- SFTP/SCP subsystem over the same SSH channel
+- Hypervisor REST/XML-RPC/WebSocket APIs (Proxmox, XCP-ng, Xen Orchestra, ESXi/vCenter, OCI, libvirt/QEMU) — TLS via `rustls`; no system OpenSSL
+- Cloud provider REST APIs (DigitalOcean, Hetzner, Linode, Vultr, AWS EC2, GCE, Azure) — credential stored in OS keychain, never in DB
+- Mosh UDP/SSP to remote `mosh-server` on user-configured hosts
+- No telemetry; no analytics; no CDN asset fetches at runtime
+
+**Stored data location (per-user — PART 4 → "Path Rule"):**
+- Config: `~/.config/tabssh/tabssh/config.toml` (Linux/BSD) · `~/Library/Application Support/tabssh/config/config.toml` (macOS) · `%AppData%\tabssh\tabssh\config\config.toml` (Windows)
+- Data/DB: `~/.local/share/tabssh/tabssh/tabssh.db` (Linux/BSD) · `~/Library/Application Support/tabssh/data/tabssh.db` (macOS) · `%LocalAppData%\tabssh\tabssh\data\tabssh.db` (Windows)
+- Cache: `~/.cache/tabssh/tabssh/` (Linux/BSD) · `~/Library/Caches/tabssh/` (macOS) · `%LocalAppData%\tabssh\tabssh\cache\` (Windows)
+- Logs: `~/.local/state/tabssh/tabssh/logs/` (Linux/BSD) · `~/Library/Logs/tabssh/` (macOS) · `%LocalAppData%\tabssh\tabssh\logs\` (Windows)
+- Credentials: OS keychain only (Linux Secret Service, macOS Keychain, Windows Credential Manager) — never in the DB or on disk in plaintext
+
+**License exceptions (PART 0 → "Rust-Only Application", PART 5 → "Pure-Rust Library Stack"):**
+- `rusqlite` with `bundled` feature: statically vendors SQLite C for the local encrypted database. No viable pure-Rust production alternative exists today (`limbo` is pre-alpha). The C code is statically linked into the final binary and does not require a system SQLite at runtime. Distribution license remains MIT.
+- `ring`: pre-granted by PART 5 (small, audited, ubiquitous; requires LICENSE.md attribution only).
+
+---
 
 ### Must have
 
