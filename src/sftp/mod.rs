@@ -1,21 +1,10 @@
 //! SFTP module - Secure file transfer
 
-mod client;
 mod browser;
-mod transfer;
-
-pub use client::{
-    SftpClient,
-    TransferTask,
-    read_local_directory,
-    create_local_directory,
-    delete_local_path,
-    format_file_size,
-    format_permissions,
-};
+mod client;
+pub mod transfer;
 
 pub use browser::{SftpBrowser, SortColumn};
-pub use transfer::TransferManager;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileType {

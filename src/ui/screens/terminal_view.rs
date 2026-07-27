@@ -2,13 +2,13 @@
 
 #![allow(dead_code)]
 
-use eframe::egui::{self, RichText};
 use crate::ssh::{ActiveSession, SessionEvent};
-use crate::terminal::{Terminal, TerminalSize, RendererConfig, CursorStyle};
+use crate::terminal::{CursorStyle, RendererConfig, Terminal, TerminalSize};
 use crate::ui::components::{colors, spacing};
-use uuid::Uuid;
+use eframe::egui::{self, RichText};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
+use uuid::Uuid;
 
 /// Connection state for the terminal
 #[derive(Clone, PartialEq)]
@@ -125,7 +125,12 @@ impl TerminalViewScreen {
         }
     }
 
-    pub fn connect_with_key(&mut self, runtime: Arc<Runtime>, key_path: String, passphrase: Option<String>) {
+    pub fn connect_with_key(
+        &mut self,
+        runtime: Arc<Runtime>,
+        key_path: String,
+        passphrase: Option<String>,
+    ) {
         let host = self.session_host.clone();
         let port = self.session_port;
         let username = self.session_user.clone();
@@ -170,7 +175,8 @@ impl TerminalViewScreen {
                 SessionEvent::Disconnected => {
                     self.connection_state = ConnectionState::Disconnected;
                     self.is_connected = false;
-                    self.terminal.process(b"\r\n\x1b[33mConnection closed.\x1b[0m\r\n");
+                    self.terminal
+                        .process(b"\r\n\x1b[33mConnection closed.\x1b[0m\r\n");
                     should_clear_session = true;
                 }
                 SessionEvent::Error(err) => {
@@ -275,9 +281,9 @@ impl TerminalViewScreen {
 
         let available = ui.available_size();
 
-        let response = egui::Frame::none()
+        let response = egui::Frame::NONE
             .fill(egui::Color32::from_rgb(30, 30, 30))
-            .rounding(egui::Rounding::ZERO)
+            .corner_radius(egui::CornerRadius::ZERO)
             .show(ui, |ui| {
                 ui.set_min_size(available);
 
@@ -298,7 +304,8 @@ impl TerminalViewScreen {
             });
 
         let rect = response.response.rect;
-        let terminal_response = ui.interact(rect, ui.id().with("terminal_input"), egui::Sense::click());
+        let terminal_response =
+            ui.interact(rect, ui.id().with("terminal_input"), egui::Sense::click());
 
         if terminal_response.clicked() {
             ui.memory_mut(|mem| mem.request_focus(ui.id().with("terminal_input")));
@@ -318,7 +325,12 @@ impl TerminalViewScreen {
                     egui::Event::Text(text) => {
                         self.send_input(text.as_bytes());
                     }
-                    egui::Event::Key { key, pressed: true, modifiers, .. } => {
+                    egui::Event::Key {
+                        key,
+                        pressed: true,
+                        modifiers,
+                        ..
+                    } => {
                         if let Some(data) = key_to_escape_sequence(*key, modifiers) {
                             self.send_input(&data);
                         }
@@ -339,10 +351,10 @@ impl TerminalViewScreen {
             ConnectionState::Error(_) => (colors::DANGER, "Error"),
         };
 
-        egui::TopBottomPanel::bottom("terminal_status")
-            .exact_height(24.0)
-            .frame(egui::Frame::none().fill(colors::BG_SECONDARY))
-            .show_inside(ui, |ui| {
+        egui::Panel::bottom("terminal_status")
+            .exact_size(24.0)
+            .frame(egui::Frame::NONE.fill(colors::BG_SECONDARY))
+            .show(ui, |ui| {
                 ui.horizontal_centered(|ui| {
                     ui.add_space(spacing::SM);
 
@@ -352,32 +364,38 @@ impl TerminalViewScreen {
                     ui.separator();
 
                     if !self.session_host.is_empty() {
-                        ui.label(RichText::new(format!(
-                            "{}@{}:{}",
-                            self.session_user, self.session_host, self.session_port
-                        ))
-                        .color(colors::TEXT_SECONDARY)
-                        .size(11.0));
+                        ui.label(
+                            RichText::new(format!(
+                                "{}@{}:{}",
+                                self.session_user, self.session_host, self.session_port
+                            ))
+                            .color(colors::TEXT_SECONDARY)
+                            .size(11.0),
+                        );
                         ui.separator();
                     }
 
                     let size = self.terminal.size();
-                    ui.label(RichText::new(format!("{}x{}", size.cols, size.rows))
-                        .color(colors::TEXT_MUTED)
-                        .size(11.0));
+                    ui.label(
+                        RichText::new(format!("{}x{}", size.cols, size.rows))
+                            .color(colors::TEXT_MUTED)
+                            .size(11.0),
+                    );
 
                     ui.separator();
 
                     let scrollback = self.terminal.buffer().scrollback_len();
-                    ui.label(RichText::new(format!("{} lines in scrollback", scrollback))
-                        .color(colors::TEXT_MUTED)
-                        .size(11.0));
+                    ui.label(
+                        RichText::new(format!("{} lines in scrollback", scrollback))
+                            .color(colors::TEXT_MUTED)
+                            .size(11.0),
+                    );
                 });
             });
 
         egui::CentralPanel::default()
-            .frame(egui::Frame::none())
-            .show_inside(ui, |ui| {
+            .frame(egui::Frame::NONE)
+            .show(ui, |ui| {
                 self.render(ui);
             });
     }

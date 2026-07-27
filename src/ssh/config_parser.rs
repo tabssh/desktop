@@ -45,7 +45,7 @@ impl SshConfigParser {
 
         for line in content.lines() {
             let line = line.trim();
-            
+
             // Skip empty lines and comments
             if line.is_empty() || line.starts_with('#') {
                 continue;
@@ -57,18 +57,20 @@ impl SshConfigParser {
             }
 
             let keyword = parts[0].to_lowercase();
-            
+
             match keyword.as_str() {
                 "host" => {
                     // Save previous host
                     if let Some(host) = current_host.take() {
                         self.configs.insert(host.host_pattern.clone(), host);
                     }
-                    
+
                     // Start new host
                     if parts.len() > 1 {
-                        let mut host = HostConfig::default();
-                        host.host_pattern = parts[1].to_string();
+                        let host = HostConfig {
+                            host_pattern: parts[1].to_string(),
+                            ..Default::default()
+                        };
                         current_host = Some(host);
                     }
                 }
@@ -107,15 +109,21 @@ impl SshConfigParser {
                 }
                 "localforward" if parts.len() > 2 => {
                     if let Some(ref mut host) = current_host {
-                        if let Some((local_port, remote_host, remote_port)) = parse_forward(&parts[1..]) {
-                            host.local_forward.push((local_port, remote_host, remote_port));
+                        if let Some((local_port, remote_host, remote_port)) =
+                            parse_forward(&parts[1..])
+                        {
+                            host.local_forward
+                                .push((local_port, remote_host, remote_port));
                         }
                     }
                 }
                 "remoteforward" if parts.len() > 2 => {
                     if let Some(ref mut host) = current_host {
-                        if let Some((remote_port, local_host, local_port)) = parse_forward(&parts[1..]) {
-                            host.remote_forward.push((remote_port, local_host, local_port));
+                        if let Some((remote_port, local_host, local_port)) =
+                            parse_forward(&parts[1..])
+                        {
+                            host.remote_forward
+                                .push((remote_port, local_host, local_port));
                         }
                     }
                 }
@@ -159,14 +167,20 @@ impl SshConfigParser {
             return Some(config);
         }
 
-        // Try wildcard patterns
+        // Try wildcard patterns, preferring a specific pattern (e.g.
+        // "*.internal") over the catch-all "*" so that iteration order over
+        // the underlying HashMap can never make a broad match shadow a
+        // narrower one.
+        let mut catch_all = None;
         for (pattern, config) in &self.configs {
-            if pattern == "*" || wildcard_match(pattern, host) {
+            if pattern == "*" {
+                catch_all = Some(config);
+            } else if wildcard_match(pattern, host) {
                 return Some(config);
             }
         }
 
-        None
+        catch_all
     }
 
     /// Get all host patterns
@@ -177,7 +191,7 @@ impl SshConfigParser {
     /// Parse default SSH config location
     pub fn parse_default() -> Result<Self> {
         let mut parser = Self::new();
-        
+
         if let Some(home) = dirs::home_dir() {
             let config_path = home.join(".ssh").join("config");
             if config_path.exists() {
@@ -224,7 +238,7 @@ fn parse_forward(parts: &[&str]) -> Option<(u16, String, u16)> {
     }
 
     // Try "port:host:port" format
-    if parts.len() >= 1 {
+    if !parts.is_empty() {
         let spec = parts[0];
         let components: Vec<&str> = spec.split(':').collect();
         if components.len() == 3 {
@@ -243,7 +257,7 @@ fn parse_forward(parts: &[&str]) -> Option<(u16, String, u16)> {
 fn wildcard_match(pattern: &str, text: &str) -> bool {
     let pattern_chars: Vec<char> = pattern.chars().collect();
     let text_chars: Vec<char> = text.chars().collect();
-    
+
     wildcard_match_recursive(&pattern_chars, &text_chars, 0, 0)
 }
 
@@ -260,8 +274,10 @@ fn wildcard_match_recursive(pattern: &[char], text: &[char], p_idx: usize, t_idx
             }
         }
         false
-    } else if p_idx < pattern.len() && t_idx < text.len() &&
-              (pattern[p_idx] == '?' || pattern[p_idx] == text[t_idx]) {
+    } else if p_idx < pattern.len()
+        && t_idx < text.len()
+        && (pattern[p_idx] == '?' || pattern[p_idx] == text[t_idx])
+    {
         wildcard_match_recursive(pattern, text, p_idx + 1, t_idx + 1)
     } else {
         false
@@ -286,16 +302,16 @@ Host example
         parser.parse_content(config).unwrap();
 
         let host_config = parser.get_config("example").unwrap();
-        assert_eq!(host_config.hostname,Some("example.com".to_string()));
-        assert_eq!(host_config.port,Some(2222));
-        assert_eq!(host_config.user,Some("admin".to_string()));
+        assert_eq!(host_config.hostname, Some("example.com".to_string()));
+        assert_eq!(host_config.port, Some(2222));
+        assert_eq!(host_config.user, Some("admin".to_string()));
     }
 
     #[test]
     fn test_wildcard_match() {
-        assert!(wildcard_match("*.example.com","server.example.com"));
-        assert!(wildcard_match("server?","server1"));
-        assert!(!wildcard_match("*.com","example.org"));
+        assert!(wildcard_match("*.example.com", "server.example.com"));
+        assert!(wildcard_match("server?", "server1"));
+        assert!(!wildcard_match("*.com", "example.org"));
     }
 
     #[test]

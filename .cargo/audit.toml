@@ -1,0 +1,21 @@
+# cargo-audit configuration.
+#
+# Advisories below are accepted transitive-dependency risks with no
+# available fix in our current dependency graph. Each is reviewed
+# periodically (tracked in TODO.AI.md).
+[advisories]
+ignore = [
+    # quick-xml 0.39.4 pulled in transitively via
+    # eframe -> winit -> smithay-client-toolkit -> wayland-scanner,
+    # which pins quick-xml to "^0.39". eframe 0.35.0 is already the
+    # latest release (verified via `cargo search eframe`), so there is
+    # no upgrade path today. Revisit when eframe/winit ship a release
+    # that depends on wayland-scanner >=0.32 with quick-xml >=0.41.
+    "RUSTSEC-2026-0195",
+    "RUSTSEC-2026-0194",
+    # rsa 0.10.0-rc.18 (Marvin Attack timing sidechannel) is pulled in
+    # directly by russh 0.62.4 and by ssh-key. No fixed version of the
+    # rsa crate exists upstream ("No fixed upgrade is available!" per
+    # the advisory). Revisit when either rsa or russh ships a fix.
+    "RUSTSEC-2023-0071",
+]

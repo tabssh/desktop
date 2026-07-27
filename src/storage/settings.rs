@@ -1,8 +1,8 @@
 //! Settings persistence
 
+use super::database::Database;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use super::database::Database;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
@@ -10,7 +10,7 @@ pub struct Settings {
     pub default_shell: String,
     pub auto_connect_on_startup: bool,
     pub restore_previous_sessions: bool,
-    
+
     // Terminal
     pub font_family: String,
     pub font_size: f32,
@@ -18,21 +18,21 @@ pub struct Settings {
     pub cursor_style: CursorStyle,
     pub cursor_blink: bool,
     pub bell_style: BellStyle,
-    
+
     // Theme
     pub selected_theme: String,
-    
+
     // Connection
     pub default_port: u16,
     pub connection_timeout: u32,
     pub keepalive_interval: u32,
     pub compression: bool,
-    
+
     // Security
     pub auto_lock_timeout: u32,
     pub remember_passwords: bool,
     pub strict_host_key_checking: bool,
-    
+
     // Advanced
     pub log_level: String,
 }
@@ -79,7 +79,7 @@ impl Default for Settings {
 impl Settings {
     pub fn load(db: &Database) -> Result<Self> {
         let conn = db.connection();
-        
+
         match conn.query_row(
             "SELECT value FROM settings WHERE key = 'app_settings'",
             [],
@@ -89,15 +89,15 @@ impl Settings {
             Err(_) => Ok(Self::default()),
         }
     }
-    
+
     pub fn save(&self, db: &Database) -> Result<()> {
         let json = serde_json::to_string(self)?;
-        
+
         db.connection().execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES ('app_settings', ?1)",
             [&json],
         )?;
-        
+
         Ok(())
     }
 }

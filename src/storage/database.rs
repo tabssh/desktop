@@ -32,8 +32,8 @@ impl Database {
 
     /// Get the database file path
     fn database_path() -> Result<PathBuf> {
-        let data_dir = dirs::data_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find data directory"))?;
+        let data_dir =
+            dirs::data_dir().ok_or_else(|| anyhow::anyhow!("Could not find data directory"))?;
 
         Ok(data_dir.join("tabssh").join("tabssh.db"))
     }
@@ -131,7 +131,7 @@ impl Database {
     pub fn get_known_host(&self, host: &str, port: u16) -> Result<Option<KnownHost>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, host, port, key_type, fingerprint, public_key, first_seen, last_seen 
-             FROM known_hosts WHERE host = ?1 AND port = ?2"
+             FROM known_hosts WHERE host = ?1 AND port = ?2",
         )?;
 
         let result = stmt.query_row(rusqlite::params![host, port], |row| {
@@ -164,7 +164,7 @@ impl Database {
         public_key: &[u8],
     ) -> Result<()> {
         use uuid::Uuid;
-        
+
         let id = Uuid::new_v4().to_string();
         let now = chrono::Local::now().to_rfc3339();
 
@@ -181,7 +181,7 @@ impl Database {
     /// Update last_seen timestamp for known host
     pub fn update_known_host_last_seen(&self, host: &str, port: u16) -> Result<()> {
         let now = chrono::Local::now().to_rfc3339();
-        
+
         self.conn.execute(
             "UPDATE known_hosts SET last_seen = ?1 WHERE host = ?2 AND port = ?3",
             rusqlite::params![&now, host, port as i64],
@@ -205,22 +205,23 @@ impl Database {
     pub fn list_known_hosts(&self) -> Result<Vec<KnownHost>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, host, port, key_type, fingerprint, public_key, first_seen, last_seen 
-             FROM known_hosts ORDER BY last_seen DESC"
+             FROM known_hosts ORDER BY last_seen DESC",
         )?;
 
-        let hosts = stmt.query_map([], |row| {
-            Ok(KnownHost {
-                id: row.get(0)?,
-                host: row.get(1)?,
-                port: row.get::<_, i64>(2)? as u16,
-                key_type: row.get(3)?,
-                fingerprint: row.get(4)?,
-                public_key: row.get(5)?,
-                first_seen: row.get(6)?,
-                last_seen: row.get(7)?,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
+        let hosts = stmt
+            .query_map([], |row| {
+                Ok(KnownHost {
+                    id: row.get(0)?,
+                    host: row.get(1)?,
+                    port: row.get::<_, i64>(2)? as u16,
+                    key_type: row.get(3)?,
+                    fingerprint: row.get(4)?,
+                    public_key: row.get(5)?,
+                    first_seen: row.get(6)?,
+                    last_seen: row.get(7)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(hosts)
     }

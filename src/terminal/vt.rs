@@ -22,7 +22,7 @@ pub enum AnsiColor {
     Rgb(u8, u8, u8),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct CellStyle {
     pub foreground: Option<AnsiColor>,
     pub background: Option<AnsiColor>,
@@ -44,20 +44,6 @@ impl Default for Cell {
         Self {
             c: ' ',
             style: CellStyle::default(),
-        }
-    }
-}
-
-impl Default for CellStyle {
-    fn default() -> Self {
-        Self {
-            foreground: None,
-            background: None,
-            bold: false,
-            italic: false,
-            underline: false,
-            reverse: false,
-            dim: false,
         }
     }
 }
@@ -84,7 +70,7 @@ impl VtParser {
             current_param: String::new(),
         }
     }
-    
+
     pub fn parse(&mut self, byte: u8) -> Option<VtCommand> {
         match self.state {
             ParserState::Normal => {
@@ -95,26 +81,24 @@ impl VtParser {
                     Some(VtCommand::Print(byte as char))
                 }
             }
-            ParserState::Escape => {
-                match byte {
-                    b'[' => {
-                        self.state = ParserState::Csi;
-                        self.params.clear();
-                        self.current_param.clear();
-                        None
-                    }
-                    b']' => {
-                        self.state = ParserState::OscString;
-                        None
-                    }
-                    _ => {
-                        self.state = ParserState::Normal;
-                        None
-                    }
+            ParserState::Escape => match byte {
+                b'[' => {
+                    self.state = ParserState::Csi;
+                    self.params.clear();
+                    self.current_param.clear();
+                    None
                 }
-            }
+                b']' => {
+                    self.state = ParserState::OscString;
+                    None
+                }
+                _ => {
+                    self.state = ParserState::Normal;
+                    None
+                }
+            },
             ParserState::Csi => {
-                if byte >= b'0' && byte <= b'9' {
+                if byte.is_ascii_digit() {
                     self.current_param.push(byte as char);
                     None
                 } else if byte == b';' {
@@ -124,7 +108,7 @@ impl VtParser {
                     self.current_param.clear();
                     None
                 } else {
-                    if !self.current_param.is_empty(){
+                    if !self.current_param.is_empty() {
                         if let Ok(param) = self.current_param.parse() {
                             self.params.push(param);
                         }
@@ -141,20 +125,32 @@ impl VtParser {
             }
         }
     }
-    
+
     fn handle_csi_command(&mut self, cmd: char) -> Option<VtCommand> {
         match cmd {
-            'A' => Some(VtCommand::CursorUp(self.params.first().copied().unwrap_or(1))),
-            'B' => Some(VtCommand::CursorDown(self.params.first().copied().unwrap_or(1))),
-            'C' => Some(VtCommand::CursorForward(self.params.first().copied().unwrap_or(1))),
-            'D' => Some(VtCommand::CursorBackward(self.params.first().copied().unwrap_or(1))),
+            'A' => Some(VtCommand::CursorUp(
+                self.params.first().copied().unwrap_or(1),
+            )),
+            'B' => Some(VtCommand::CursorDown(
+                self.params.first().copied().unwrap_or(1),
+            )),
+            'C' => Some(VtCommand::CursorForward(
+                self.params.first().copied().unwrap_or(1),
+            )),
+            'D' => Some(VtCommand::CursorBackward(
+                self.params.first().copied().unwrap_or(1),
+            )),
             'H' => {
-                let row = self.params.get(0).copied().unwrap_or(1).saturating_sub(1);
+                let row = self.params.first().copied().unwrap_or(1).saturating_sub(1);
                 let col = self.params.get(1).copied().unwrap_or(1).saturating_sub(1);
                 Some(VtCommand::CursorPosition(row, col))
             }
-            'J' => Some(VtCommand::ClearScreen(self.params.first().copied().unwrap_or(0))),
-            'K' => Some(VtCommand::ClearLine(self.params.first().copied().unwrap_or(0))),
+            'J' => Some(VtCommand::ClearScreen(
+                self.params.first().copied().unwrap_or(0),
+            )),
+            'K' => Some(VtCommand::ClearLine(
+                self.params.first().copied().unwrap_or(0),
+            )),
             'm' => Some(VtCommand::SetGraphicsMode(self.params.clone())),
             _ => None,
         }

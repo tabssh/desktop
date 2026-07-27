@@ -3,17 +3,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
-mod config;
-mod crypto;
-mod platform;
-mod sftp;
-mod ssh;
-mod storage;
-mod terminal;
-mod ui;
-mod utils;
 
 use app::TabSshApp;
+use tabssh::{platform, utils};
 
 fn main() -> anyhow::Result<()> {
     // Initialize logging
@@ -46,7 +38,7 @@ fn main() -> anyhow::Result<()> {
     eframe::run_native(
         "TabSSH",
         native_options,
-        Box::new(|cc| Box::new(TabSshApp::new(cc))),
+        Box::new(|cc| Ok(Box::new(TabSshApp::new(cc)))),
     )
     .map_err(|e| anyhow::anyhow!("Failed to run application: {}", e))
 }

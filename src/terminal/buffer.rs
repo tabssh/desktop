@@ -54,7 +54,10 @@ pub struct TerminalBuffer {
 
 impl TerminalBuffer {
     pub fn new(cols: u16, rows: u16, max_scrollback: usize) -> Self {
-        let size = TerminalSize { cols: cols as usize, rows: rows as usize };
+        let size = TerminalSize {
+            cols: cols as usize,
+            rows: rows as usize,
+        };
         let screen = Self::create_empty_screen(cols as usize, rows as usize);
 
         Self {
@@ -135,12 +138,12 @@ impl TerminalBuffer {
             return;
         }
 
-        if self.cursor_x >= self.size.cols as usize {
+        if self.cursor_x >= self.size.cols {
             if self.auto_wrap {
                 self.cursor_x = 0;
                 self.newline();
             } else {
-                self.cursor_x = self.size.cols as usize - 1;
+                self.cursor_x = self.size.cols - 1;
             }
         }
 
@@ -169,8 +172,8 @@ impl TerminalBuffer {
 
     /// Move cursor to absolute position
     pub fn set_cursor(&mut self, x: usize, y: usize) {
-        let max_x = self.size.cols as usize - 1;
-        let max_y = self.size.rows as usize - 1;
+        let max_x = self.size.cols - 1;
+        let max_y = self.size.rows - 1;
 
         self.cursor_x = x.min(max_x);
 
@@ -207,14 +210,14 @@ impl TerminalBuffer {
     /// Handle tab
     fn tab(&mut self) {
         let next_tab = ((self.cursor_x / 8) + 1) * 8;
-        self.cursor_x = next_tab.min(self.size.cols as usize - 1);
+        self.cursor_x = next_tab.min(self.size.cols - 1);
     }
 
     /// Scroll the screen up by n lines
     pub fn scroll_up(&mut self, n: usize) {
         for _ in 0..n {
             if self.scroll_top == 0 {
-                if let Some(row) = self.screen.get(0).cloned() {
+                if let Some(row) = self.screen.first().cloned() {
                     self.scrollback.push(row);
 
                     while self.scrollback.len() > self.max_scrollback {
@@ -230,9 +233,8 @@ impl TerminalBuffer {
             }
 
             if self.scroll_bottom < self.screen.len() {
-                self.screen[self.scroll_bottom] = (0..self.size.cols as usize)
-                    .map(|_| Cell::default())
-                    .collect();
+                self.screen[self.scroll_bottom] =
+                    (0..self.size.cols).map(|_| Cell::default()).collect();
             }
         }
     }
@@ -247,26 +249,22 @@ impl TerminalBuffer {
             }
 
             if self.scroll_top < self.screen.len() {
-                self.screen[self.scroll_top] = (0..self.size.cols as usize)
-                    .map(|_| Cell::default())
-                    .collect();
+                self.screen[self.scroll_top] =
+                    (0..self.size.cols).map(|_| Cell::default()).collect();
             }
         }
     }
 
     /// Clear the screen
     pub fn clear(&mut self) {
-        self.screen = Self::create_empty_screen(
-            self.size.cols as usize,
-            self.size.rows as usize,
-        );
+        self.screen = Self::create_empty_screen(self.size.cols, self.size.rows);
     }
 
     /// Clear from cursor to end of screen
     pub fn clear_to_end(&mut self) {
         self.clear_line_to_end();
 
-        for y in (self.cursor_y + 1)..self.size.rows as usize {
+        for y in (self.cursor_y + 1)..self.size.rows {
             if let Some(row) = self.screen.get_mut(y) {
                 for cell in row.iter_mut() {
                     cell.clear();
@@ -300,8 +298,8 @@ impl TerminalBuffer {
     /// Clear from cursor to end of line
     pub fn clear_line_to_end(&mut self) {
         if let Some(row) = self.screen.get_mut(self.cursor_y) {
-            for x in self.cursor_x..row.len() {
-                row[x].clear();
+            for cell in row.iter_mut().skip(self.cursor_x) {
+                cell.clear();
             }
         }
     }
@@ -346,7 +344,7 @@ impl TerminalBuffer {
                 self.screen.remove(self.scroll_bottom);
                 self.screen.insert(
                     self.cursor_y,
-                    (0..self.size.cols as usize).map(|_| Cell::default()).collect(),
+                    (0..self.size.cols).map(|_| Cell::default()).collect(),
                 );
             }
         }
@@ -359,7 +357,7 @@ impl TerminalBuffer {
                 self.screen.remove(self.cursor_y);
                 self.screen.insert(
                     self.scroll_bottom,
-                    (0..self.size.cols as usize).map(|_| Cell::default()).collect(),
+                    (0..self.size.cols).map(|_| Cell::default()).collect(),
                 );
             }
         }
@@ -390,7 +388,7 @@ impl TerminalBuffer {
 
     /// Set scroll region
     pub fn set_scroll_region(&mut self, top: usize, bottom: usize) {
-        let max_row = self.size.rows as usize - 1;
+        let max_row = self.size.rows - 1;
         self.scroll_top = top.min(max_row);
         self.scroll_bottom = bottom.min(max_row).max(self.scroll_top);
     }
@@ -398,7 +396,7 @@ impl TerminalBuffer {
     /// Reset scroll region to full screen
     pub fn reset_scroll_region(&mut self) {
         self.scroll_top = 0;
-        self.scroll_bottom = self.size.rows as usize - 1;
+        self.scroll_bottom = self.size.rows - 1;
     }
 
     /// Switch to alternate screen buffer
@@ -465,7 +463,10 @@ impl TerminalBuffer {
         }
 
         self.screen = new_screen;
-        self.size = TerminalSize { cols: new_cols, rows: new_rows };
+        self.size = TerminalSize {
+            cols: new_cols,
+            rows: new_rows,
+        };
 
         self.cursor_x = self.cursor_x.min(new_cols.saturating_sub(1));
         self.cursor_y = self.cursor_y.min(new_rows.saturating_sub(1));

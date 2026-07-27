@@ -7,6 +7,10 @@ use std::path::PathBuf;
 pub struct SftpBrowserScreen {
     browser: SftpBrowser,
     current_path_input: String,
+    /// Local file/directory chosen for an upload; set by the local-side
+    /// file picker but not yet read by the (unwired) upload action — see
+    /// TODO.AI.md Phase 1.3.
+    #[allow(dead_code)]
     selected_local_path: Option<PathBuf>,
     transfer_progress: Vec<TransferProgress>,
 }
@@ -51,8 +55,12 @@ impl SftpBrowserScreen {
             ui.separator();
 
             ui.label("Path:");
-            if ui.text_edit_singleline(&mut self.current_path_input).lost_focus() {
-                self.browser.change_directory(PathBuf::from(&self.current_path_input));
+            if ui
+                .text_edit_singleline(&mut self.current_path_input)
+                .lost_focus()
+            {
+                self.browser
+                    .change_directory(PathBuf::from(&self.current_path_input));
             }
         });
 
@@ -82,8 +90,8 @@ impl SftpBrowserScreen {
         // File list
         egui::ScrollArea::vertical().show(ui, |ui| {
             // Collect entries to avoid borrow checker issues
-            let entries: Vec<_> = self.browser.entries().iter().cloned().collect();
-            let selected_indices: Vec<_> = self.browser.selected().iter().cloned().collect();
+            let entries: Vec<_> = self.browser.entries().to_vec();
+            let selected_indices: Vec<_> = self.browser.selected().to_vec();
 
             for (idx, entry) in entries.iter().enumerate() {
                 let is_selected = selected_indices.contains(&idx);
@@ -96,18 +104,19 @@ impl SftpBrowserScreen {
                         crate::sftp::FileType::Other => "❓",
                     };
 
-                    let response = ui.selectable_label(is_selected, format!("{} {}", icon, entry.name));
+                    let response =
+                        ui.selectable_label(is_selected, format!("{} {}", icon, entry.name));
 
                     if response.clicked() {
                         self.browser.toggle_selection(idx);
                     }
 
-                    if response.double_clicked() {
-                        if matches!(entry.file_type, crate::sftp::FileType::Directory) {
-                            let new_path = self.browser.get_full_path(entry);
-                            self.browser.change_directory(new_path.clone());
-                            self.current_path_input = new_path.to_string_lossy().into_owned();
-                        }
+                    if response.double_clicked()
+                        && matches!(entry.file_type, crate::sftp::FileType::Directory)
+                    {
+                        let new_path = self.browser.get_full_path(entry);
+                        self.browser.change_directory(new_path.clone());
+                        self.current_path_input = new_path.to_string_lossy().into_owned();
                     }
 
                     ui.label(format!("{} bytes", entry.size));

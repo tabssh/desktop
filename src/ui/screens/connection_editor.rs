@@ -2,9 +2,11 @@
 
 #![allow(dead_code)]
 
+use crate::ui::components::{
+    card, colors, danger_button, form_row, labeled_dropdown, labeled_input, labeled_number,
+    labeled_toggle, primary_button, secondary_button, section_header, spacing,
+};
 use eframe::egui::{self, RichText};
-use crate::ui::components::{colors, spacing, primary_button, secondary_button, danger_button,
-    labeled_input, labeled_number, labeled_toggle, labeled_dropdown, section_header, card, form_row};
 
 /// Authentication type used in a connection profile
 #[derive(Clone, PartialEq)]
@@ -167,7 +169,11 @@ impl ConnectionEditorScreen {
 
         egui::ScrollArea::vertical().show(ui, |ui| {
             let is_new = self.editing_id.is_none();
-            let title = if is_new { "New Connection" } else { "Edit Connection" };
+            let title = if is_new {
+                "New Connection"
+            } else {
+                "Edit Connection"
+            };
 
             ui.horizontal(|ui| {
                 ui.heading(RichText::new(title).color(colors::TEXT_PRIMARY).size(20.0));
@@ -214,7 +220,13 @@ impl ConnectionEditorScreen {
                         FormAuthMethod::KeyboardInteractive,
                         FormAuthMethod::Agent,
                     ];
-                    labeled_dropdown(ui, "Method", "auth_method", &mut self.auth_method, &auth_methods);
+                    labeled_dropdown(
+                        ui,
+                        "Method",
+                        "auth_method",
+                        &mut self.auth_method,
+                        &auth_methods,
+                    );
                 });
 
                 match self.auth_method {
@@ -222,25 +234,40 @@ impl ConnectionEditorScreen {
                         form_row(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.label(RichText::new("Password").color(colors::TEXT_PRIMARY));
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    let input = egui::TextEdit::singleline(&mut self.password)
-                                        .hint_text(RichText::new("Enter password").color(colors::TEXT_MUTED))
-                                        .text_color(colors::TEXT_PRIMARY)
-                                        .password(true)
-                                        .desired_width(200.0)
-                                        .margin(egui::vec2(8.0, 6.0));
-                                    ui.add(input);
-                                });
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        let input = egui::TextEdit::singleline(&mut self.password)
+                                            .hint_text(
+                                                RichText::new("Enter password")
+                                                    .color(colors::TEXT_MUTED),
+                                            )
+                                            .text_color(colors::TEXT_PRIMARY)
+                                            .password(true)
+                                            .desired_width(200.0)
+                                            .margin(egui::vec2(8.0, 6.0));
+                                        ui.add(input);
+                                    },
+                                );
                             });
                         });
                         form_row(ui, |ui| {
-                            labeled_toggle(ui, "Save password in keychain", &mut self.save_password);
+                            labeled_toggle(
+                                ui,
+                                "Save password in keychain",
+                                &mut self.save_password,
+                            );
                         });
                     }
                     FormAuthMethod::PublicKey => {
                         form_row(ui, |ui| {
                             ui.horizontal(|ui| {
-                                labeled_input(ui, "Private Key", &mut self.private_key_path, "~/.ssh/id_ed25519");
+                                labeled_input(
+                                    ui,
+                                    "Private Key",
+                                    &mut self.private_key_path,
+                                    "~/.ssh/id_ed25519",
+                                );
                                 if secondary_button(ui, "Browse...").clicked() {
                                     log::info!("File picker not yet implemented");
                                 }
@@ -249,27 +276,40 @@ impl ConnectionEditorScreen {
                         form_row(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.label(RichText::new("Passphrase").color(colors::TEXT_PRIMARY));
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    let input = egui::TextEdit::singleline(&mut self.passphrase)
-                                        .hint_text(RichText::new("Optional").color(colors::TEXT_MUTED))
-                                        .text_color(colors::TEXT_PRIMARY)
-                                        .password(true)
-                                        .desired_width(200.0)
-                                        .margin(egui::vec2(8.0, 6.0));
-                                    ui.add(input);
-                                });
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        let input =
+                                            egui::TextEdit::singleline(&mut self.passphrase)
+                                                .hint_text(
+                                                    RichText::new("Optional")
+                                                        .color(colors::TEXT_MUTED),
+                                                )
+                                                .text_color(colors::TEXT_PRIMARY)
+                                                .password(true)
+                                                .desired_width(200.0)
+                                                .margin(egui::vec2(8.0, 6.0));
+                                        ui.add(input);
+                                    },
+                                );
                             });
                         });
                     }
                     FormAuthMethod::KeyboardInteractive => {
-                        ui.label(RichText::new("You will be prompted for authentication during connection.")
+                        ui.label(
+                            RichText::new(
+                                "You will be prompted for authentication during connection.",
+                            )
                             .color(colors::TEXT_SECONDARY)
-                            .size(12.0));
+                            .size(12.0),
+                        );
                     }
                     FormAuthMethod::Agent => {
-                        ui.label(RichText::new("SSH Agent will be used for authentication.")
-                            .color(colors::TEXT_SECONDARY)
-                            .size(12.0));
+                        ui.label(
+                            RichText::new("SSH Agent will be used for authentication.")
+                                .color(colors::TEXT_SECONDARY)
+                                .size(12.0),
+                        );
                     }
                 }
             });
@@ -279,12 +319,17 @@ impl ConnectionEditorScreen {
             card(ui, |ui| {
                 form_row(ui, |ui| {
                     let term_types = ["xterm-256color", "xterm", "vt100", "linux", "screen"];
-                    let term_idx = term_types.iter().position(|&t| t == self.terminal_type).unwrap_or(0);
+                    let term_idx = term_types
+                        .iter()
+                        .position(|&t| t == self.terminal_type)
+                        .unwrap_or(0);
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("Terminal Type").color(colors::TEXT_PRIMARY));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            egui::ComboBox::from_id_source("term_type")
-                                .selected_text(RichText::new(&self.terminal_type).color(colors::TEXT_PRIMARY))
+                            egui::ComboBox::from_id_salt("term_type")
+                                .selected_text(
+                                    RichText::new(&self.terminal_type).color(colors::TEXT_PRIMARY),
+                                )
                                 .width(200.0)
                                 .show_ui(ui, |ui: &mut egui::Ui| {
                                     for (i, term) in term_types.iter().enumerate() {
@@ -297,19 +342,27 @@ impl ConnectionEditorScreen {
                     });
                 });
                 form_row(ui, |ui| {
-                    labeled_input(ui, "Initial Command", &mut self.initial_command, "Optional command to run on connect");
+                    labeled_input(
+                        ui,
+                        "Initial Command",
+                        &mut self.initial_command,
+                        "Optional command to run on connect",
+                    );
                 });
                 form_row(ui, |ui| {
                     let encodings = ["UTF-8", "ISO-8859-1", "GBK", "Big5"];
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("Character Encoding").color(colors::TEXT_PRIMARY));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            egui::ComboBox::from_id_source("encoding")
-                                .selected_text(RichText::new(&self.encoding).color(colors::TEXT_PRIMARY))
+                            egui::ComboBox::from_id_salt("encoding")
+                                .selected_text(
+                                    RichText::new(&self.encoding).color(colors::TEXT_PRIMARY),
+                                )
                                 .width(200.0)
                                 .show_ui(ui, |ui: &mut egui::Ui| {
                                     for enc in encodings {
-                                        if ui.selectable_label(self.encoding == enc, enc).clicked() {
+                                        if ui.selectable_label(self.encoding == enc, enc).clicked()
+                                        {
                                             self.encoding = enc.to_string();
                                         }
                                     }
@@ -322,20 +375,52 @@ impl ConnectionEditorScreen {
             section_header(ui, "Advanced SSH Options");
 
             card(ui, |ui| {
-                form_row(ui, |ui| { labeled_toggle(ui, "Enable compression", &mut self.compression); });
-                form_row(ui, |ui| { labeled_toggle(ui, "TCP keep-alive", &mut self.tcp_keepalive); });
-                form_row(ui, |ui| { labeled_number(ui, "Keep-alive interval (seconds)", &mut self.keepalive_interval, 0, 600); });
-                form_row(ui, |ui| { labeled_number(ui, "Connection timeout (seconds)", &mut self.connection_timeout, 5, 300); });
+                form_row(ui, |ui| {
+                    labeled_toggle(ui, "Enable compression", &mut self.compression);
+                });
+                form_row(ui, |ui| {
+                    labeled_toggle(ui, "TCP keep-alive", &mut self.tcp_keepalive);
+                });
+                form_row(ui, |ui| {
+                    labeled_number(
+                        ui,
+                        "Keep-alive interval (seconds)",
+                        &mut self.keepalive_interval,
+                        0,
+                        600,
+                    );
+                });
+                form_row(ui, |ui| {
+                    labeled_number(
+                        ui,
+                        "Connection timeout (seconds)",
+                        &mut self.connection_timeout,
+                        5,
+                        300,
+                    );
+                });
             });
 
             section_header(ui, "Forwarding");
 
             card(ui, |ui| {
-                form_row(ui, |ui| { labeled_toggle(ui, "Enable X11 forwarding", &mut self.enable_x11_forwarding); });
-                form_row(ui, |ui| { labeled_toggle(ui, "Enable agent forwarding", &mut self.enable_agent_forwarding); });
+                form_row(ui, |ui| {
+                    labeled_toggle(ui, "Enable X11 forwarding", &mut self.enable_x11_forwarding);
+                });
+                form_row(ui, |ui| {
+                    labeled_toggle(
+                        ui,
+                        "Enable agent forwarding",
+                        &mut self.enable_agent_forwarding,
+                    );
+                });
 
                 ui.add_space(spacing::SM);
-                ui.label(RichText::new("Port Forwarding").color(colors::TEXT_SECONDARY).size(13.0));
+                ui.label(
+                    RichText::new("Port Forwarding")
+                        .color(colors::TEXT_SECONDARY)
+                        .size(13.0),
+                );
                 ui.add_space(spacing::XS);
 
                 ui.horizontal(|ui| {
@@ -359,8 +444,13 @@ impl ConnectionEditorScreen {
 
                 for (i, fwd) in self.local_forwards.clone().iter().enumerate() {
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new(format!("L: {}:{}:{}", fwd.local_port, fwd.remote_host, fwd.remote_port))
-                            .color(colors::TEXT_SECONDARY));
+                        ui.label(
+                            RichText::new(format!(
+                                "L: {}:{}:{}",
+                                fwd.local_port, fwd.remote_host, fwd.remote_port
+                            ))
+                            .color(colors::TEXT_SECONDARY),
+                        );
                         if ui.small_button("x").clicked() {
                             self.local_forwards.remove(i);
                         }
@@ -369,8 +459,13 @@ impl ConnectionEditorScreen {
 
                 for (i, fwd) in self.remote_forwards.clone().iter().enumerate() {
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new(format!("R: {}:{}:{}", fwd.local_port, fwd.remote_host, fwd.remote_port))
-                            .color(colors::TEXT_SECONDARY));
+                        ui.label(
+                            RichText::new(format!(
+                                "R: {}:{}:{}",
+                                fwd.local_port, fwd.remote_host, fwd.remote_port
+                            ))
+                            .color(colors::TEXT_SECONDARY),
+                        );
                         if ui.small_button("x").clicked() {
                             self.remote_forwards.remove(i);
                         }
@@ -381,27 +476,52 @@ impl ConnectionEditorScreen {
             section_header(ui, "Jump Host / Proxy");
 
             card(ui, |ui| {
-                form_row(ui, |ui| { labeled_toggle(ui, "Use jump host (ProxyJump)", &mut self.use_jump_host); });
+                form_row(ui, |ui| {
+                    labeled_toggle(ui, "Use jump host (ProxyJump)", &mut self.use_jump_host);
+                });
 
                 if self.use_jump_host {
-                    form_row(ui, |ui| { labeled_input(ui, "Jump Host", &mut self.jump_host, "bastion.example.com"); });
-                    form_row(ui, |ui| { labeled_number(ui, "Jump Port", &mut self.jump_port, 1, 65535); });
-                    form_row(ui, |ui| { labeled_input(ui, "Jump Username", &mut self.jump_username, "Same as connection if empty"); });
+                    form_row(ui, |ui| {
+                        labeled_input(ui, "Jump Host", &mut self.jump_host, "bastion.example.com");
+                    });
+                    form_row(ui, |ui| {
+                        labeled_number(ui, "Jump Port", &mut self.jump_port, 1, 65535);
+                    });
+                    form_row(ui, |ui| {
+                        labeled_input(
+                            ui,
+                            "Jump Username",
+                            &mut self.jump_username,
+                            "Same as connection if empty",
+                        );
+                    });
                 }
             });
 
             section_header(ui, "Organization");
 
             card(ui, |ui| {
-                form_row(ui, |ui| { labeled_input(ui, "Group", &mut self.group, "Production, Development, etc."); });
-                form_row(ui, |ui| { labeled_toggle(ui, "Add to favorites", &mut self.is_favorite); });
+                form_row(ui, |ui| {
+                    labeled_input(
+                        ui,
+                        "Group",
+                        &mut self.group,
+                        "Production, Development, etc.",
+                    );
+                });
+                form_row(ui, |ui| {
+                    labeled_toggle(ui, "Add to favorites", &mut self.is_favorite);
+                });
 
                 ui.add_space(spacing::SM);
                 ui.label(RichText::new("Notes").color(colors::TEXT_PRIMARY));
                 ui.add_space(spacing::XS);
 
                 let notes_input = egui::TextEdit::multiline(&mut self.notes)
-                    .hint_text(RichText::new("Optional notes about this connection").color(colors::TEXT_MUTED))
+                    .hint_text(
+                        RichText::new("Optional notes about this connection")
+                            .color(colors::TEXT_MUTED),
+                    )
                     .text_color(colors::TEXT_PRIMARY)
                     .desired_width(ui.available_width())
                     .desired_rows(3);
@@ -417,7 +537,10 @@ impl ConnectionEditorScreen {
     /// Convert form state to a ConnectionProfile
     pub fn to_profile(&self) -> ConnectionProfile {
         ConnectionProfile {
-            id: self.editing_id.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+            id: self
+                .editing_id
+                .clone()
+                .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             name: if self.name.is_empty() {
                 format!("{}@{}", self.username, self.host)
             } else {
@@ -433,7 +556,11 @@ impl ConnectionEditorScreen {
                 // SSH Agent auth is negotiated via public key mechanism
                 FormAuthMethod::Agent => ProfileAuthType::PublicKey,
             },
-            group: if self.group.is_empty() { None } else { Some(self.group.clone()) },
+            group: if self.group.is_empty() {
+                None
+            } else {
+                Some(self.group.clone())
+            },
             last_connected: None,
             is_favorite: self.is_favorite,
         }

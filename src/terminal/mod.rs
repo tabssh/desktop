@@ -9,8 +9,8 @@ pub mod parser;
 pub mod renderer;
 
 pub use emulator::TerminalEmulator;
-pub use vt::{VtParser, VtCommand, AnsiColor, CellStyle};
-pub use renderer::{RendererConfig, CursorStyle};
+pub use renderer::{CursorStyle, RendererConfig};
+pub use vt::VtParser;
 
 /// Alias for the primary terminal emulator type
 pub type Terminal = TerminalEmulator;

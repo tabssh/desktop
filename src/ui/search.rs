@@ -22,10 +22,10 @@ impl SearchWidget {
             total_matches: 0,
         }
     }
-    
+
     pub fn show(&mut self, ctx: &Context) -> Option<SearchAction> {
         let mut action = None;
-        
+
         Window::new("Find in Terminal")
             .open(&mut self.open)
             .resizable(false)
@@ -36,30 +36,33 @@ impl SearchWidget {
                         action = Some(SearchAction::Search);
                     }
                 });
-                
+
                 ui.horizontal(|ui| {
-                    if ui.checkbox(&mut self.case_sensitive, "Case sensitive").changed() {
+                    if ui
+                        .checkbox(&mut self.case_sensitive, "Case sensitive")
+                        .changed()
+                    {
                         action = Some(SearchAction::Search);
                     }
-                    
+
                     if ui.checkbox(&mut self.regex, "Regex").changed() {
                         action = Some(SearchAction::Search);
                     }
                 });
-                
+
                 ui.horizontal(|ui| {
-                    ui.label(format!("{}/{}",self.current_match+1,self.total_matches));
-                    
+                    ui.label(format!("{}/{}", self.current_match + 1, self.total_matches));
+
                     if ui.button("⬆ Previous").clicked() {
                         action = Some(SearchAction::Previous);
                     }
-                    
+
                     if ui.button("⬇ Next").clicked() {
                         action = Some(SearchAction::Next);
                     }
                 });
             });
-        
+
         action
     }
 }

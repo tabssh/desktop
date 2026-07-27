@@ -1,6 +1,6 @@
 //! Notification system
 
-use egui::{Context, Window, Color32};
+use egui::{Color32, Context, Window};
 use std::time::{Duration, Instant};
 
 pub struct NotificationManager {
@@ -30,23 +30,23 @@ impl NotificationManager {
             notifications: Vec::new(),
         }
     }
-    
+
     pub fn info(&mut self, message: impl Into<String>) {
         self.add(message.into(), NotificationLevel::Info);
     }
-    
+
     pub fn success(&mut self, message: impl Into<String>) {
         self.add(message.into(), NotificationLevel::Success);
     }
-    
+
     pub fn warning(&mut self, message: impl Into<String>) {
         self.add(message.into(), NotificationLevel::Warning);
     }
-    
+
     pub fn error(&mut self, message: impl Into<String>) {
         self.add(message.into(), NotificationLevel::Error);
     }
-    
+
     fn add(&mut self, message: String, level: NotificationLevel) {
         self.notifications.push(Notification {
             id: uuid::Uuid::new_v4(),
@@ -56,19 +56,20 @@ impl NotificationManager {
             duration: Duration::from_secs(3),
         });
     }
-    
+
     pub fn render(&mut self, ctx: &Context) {
         // Remove expired notifications
-        self.notifications.retain(|n| n.created_at.elapsed() < n.duration);
-        
+        self.notifications
+            .retain(|n| n.created_at.elapsed() < n.duration);
+
         // Show active notifications
         for (idx, notification) in self.notifications.iter().enumerate() {
             let pos = egui::pos2(
-                ctx.screen_rect().width() - 320.0,
+                ctx.content_rect().width() - 320.0,
                 10.0 + (idx as f32 * 70.0),
             );
-            
-            Window::new(format!("notification_{}",notification.id))
+
+            Window::new(format!("notification_{}", notification.id))
                 .title_bar(false)
                 .resizable(false)
                 .fixed_pos(pos)
@@ -79,7 +80,7 @@ impl NotificationManager {
                         NotificationLevel::Warning => ("⚠", Color32::YELLOW),
                         NotificationLevel::Error => ("✖", Color32::RED),
                     };
-                    
+
                     ui.horizontal(|ui| {
                         ui.colored_label(color, icon);
                         ui.label(&notification.message);

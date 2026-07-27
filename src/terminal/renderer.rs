@@ -1,8 +1,8 @@
 //! Terminal renderer for egui
 
-use eframe::egui::{self, Color32, FontId, Pos2, Rect, Stroke, Vec2};
 use super::buffer::TerminalBuffer;
 use super::Color;
+use eframe::egui::{self, Color32, FontId, Pos2, Rect, Stroke, Vec2};
 
 /// Terminal renderer configuration
 pub struct RendererConfig {
@@ -54,9 +54,8 @@ impl TerminalRenderer {
     /// Calculate character dimensions based on font
     fn calculate_char_size(&mut self, ui: &egui::Ui) {
         let font_id = FontId::monospace(self.config.font_size);
-        let galley = ui.fonts(|f| {
-            f.layout_no_wrap("M".to_string(), font_id.clone(), Color32::WHITE)
-        });
+        let galley =
+            ui.fonts_mut(|f| f.layout_no_wrap("M".to_string(), font_id.clone(), Color32::WHITE));
         self.char_width = galley.rect.width();
         self.char_height = self.config.font_size * 1.2;
     }
@@ -69,7 +68,7 @@ impl TerminalRenderer {
         let visible_rows = (available.y / self.char_height) as usize;
         let visible_cols = (available.x / self.char_width) as usize;
 
-        let total_rows = buffer.scrollback_len() + buffer.size().rows as usize;
+        let total_rows = buffer.scrollback_len() + buffer.size().rows;
 
         let max_scroll = total_rows.saturating_sub(visible_rows);
         self.scroll_offset = self.scroll_offset.min(max_scroll);
@@ -80,7 +79,7 @@ impl TerminalRenderer {
         painter.rect_filled(rect, 0.0, Color32::from_rgb(30, 30, 30));
 
         ui.input(|i| {
-            let scroll = i.scroll_delta.y;
+            let scroll = i.smooth_scroll_delta.y;
             if scroll != 0.0 {
                 let scroll_lines = (scroll / 20.0).abs() as usize;
                 if scroll > 0.0 {
@@ -248,8 +247,8 @@ impl TerminalRenderer {
             let scrollbar_width = 8.0;
             let scrollbar_x = rect.right() - scrollbar_width - 2.0;
             let scrollbar_height = (visible_rows as f32 / total_rows as f32) * rect.height();
-            let scrollbar_y = rect.top()
-                + (self.scroll_offset as f32 / total_rows as f32) * rect.height();
+            let scrollbar_y =
+                rect.top() + (self.scroll_offset as f32 / total_rows as f32) * rect.height();
 
             painter.rect_filled(
                 Rect::from_min_size(
@@ -266,7 +265,7 @@ impl TerminalRenderer {
 
     /// Scroll to bottom of buffer
     pub fn scroll_to_bottom(&mut self, buffer: &TerminalBuffer) {
-        let total_rows = buffer.scrollback_len() + buffer.size().rows as usize;
+        let total_rows = buffer.scrollback_len() + buffer.size().rows;
         let visible_rows = 24;
         self.scroll_offset = total_rows.saturating_sub(visible_rows);
     }

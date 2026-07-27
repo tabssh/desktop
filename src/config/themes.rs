@@ -37,11 +37,11 @@ impl Theme {
         if hex.len() != 6 {
             return None;
         }
-        
+
         let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
         let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
         let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-        
+
         Some((r, g, b))
     }
 
@@ -99,22 +99,34 @@ impl ThemeManager {
             themes: Vec::new(),
             current_theme: "Default Dark".to_string(),
         };
-        
+
         // Add default theme
         manager.themes.push(Theme::default_dark());
-        
+
         // Load bundled themes
         manager.load_bundled_themes();
-        
+
         manager
     }
 
     fn load_bundled_themes(&mut self) {
         let theme_files = [
-            ("assets/themes/dracula.json", include_str!("../../assets/themes/dracula.json")),
-            ("assets/themes/solarized-dark.json", include_str!("../../assets/themes/solarized-dark.json")),
-            ("assets/themes/nord.json", include_str!("../../assets/themes/nord.json")),
-            ("assets/themes/monokai.json", include_str!("../../assets/themes/monokai.json")),
+            (
+                "assets/themes/dracula.json",
+                include_str!("../../assets/themes/dracula.json"),
+            ),
+            (
+                "assets/themes/solarized-dark.json",
+                include_str!("../../assets/themes/solarized-dark.json"),
+            ),
+            (
+                "assets/themes/nord.json",
+                include_str!("../../assets/themes/nord.json"),
+            ),
+            (
+                "assets/themes/monokai.json",
+                include_str!("../../assets/themes/monokai.json"),
+            ),
         ];
 
         for (name, content) in theme_files {
@@ -161,10 +173,10 @@ mod tests {
 
     #[test]
     fn test_parse_color() {
-        assert_eq!(Theme::parse_color("#ff0000"),Some((255,0,0)));
-        assert_eq!(Theme::parse_color("#00ff00"),Some((0,255,0)));
-        assert_eq!(Theme::parse_color("#0000ff"),Some((0,0,255)));
-        assert_eq!(Theme::parse_color("invalid"),None);
+        assert_eq!(Theme::parse_color("#ff0000"), Some((255, 0, 0)));
+        assert_eq!(Theme::parse_color("#00ff00"), Some((0, 255, 0)));
+        assert_eq!(Theme::parse_color("#0000ff"), Some((0, 0, 255)));
+        assert_eq!(Theme::parse_color("invalid"), None);
     }
 
     #[test]

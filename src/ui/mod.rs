@@ -10,10 +10,4 @@ pub mod search;
 pub mod tab;
 pub mod tab_manager;
 
-pub use app_state::AppState;
-pub use keyboard::{KeyboardHandler, KeyboardAction};
-pub use main_window::MainWindow;
-pub use notifications::NotificationManager;
-pub use search::SearchWidget;
-pub use tab::{Tab, TabStatus};
-pub use tab_manager::TabManager;
+pub use tab::Tab;

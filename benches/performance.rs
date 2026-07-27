@@ -20,5 +20,5 @@ fn theme_parse_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches,terminal_render_benchmark,theme_parse_benchmark);
+criterion_group!(benches, terminal_render_benchmark, theme_parse_benchmark);
 criterion_main!(benches);

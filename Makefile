@@ -1,16 +1,17 @@
 # TabSSH Desktop - Build Automation
 
-.PHONY: build release test check docker run-gui clean help
+.PHONY: build release test check fmt docker run-gui clean help
 
 # Configuration
 PROJECT := tabssh
 VERSION := $(shell grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
 COMMIT := $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE := $(shell date "+%Y-%m-%d %H:%M:%S")
-DOCKER_IMAGE ?= rust:alpine
+DOCKER_IMAGE ?= casjaysdev/rust:latest
 
 # Docker run command
 DOCKER_RUN := docker run --rm \
+	--name "$(PROJECT)-$$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
 	-v $(PWD):/work \
 	-w /work \
 	-e TABSSH_BUILD_COMMIT=$(COMMIT) \
@@ -26,10 +27,10 @@ build:
 	@mkdir -p binaries
 
 	@# Build Linux x86_64 (static musl)
-	@echo "Building $(PROJECT)-linux-x86_64 (musl)..."
+	@echo "Building $(PROJECT)-linux-amd64 (musl)..."
 	@$(DOCKER_RUN) cargo build --release --target x86_64-unknown-linux-musl
-	@cp target/x86_64-unknown-linux-musl/release/$(PROJECT) binaries/$(PROJECT)-linux-x86_64
-	@strip binaries/$(PROJECT)-linux-x86_64 2>/dev/null || true
+	@cp target/x86_64-unknown-linux-musl/release/$(PROJECT) binaries/$(PROJECT)-linux-amd64
+	@strip binaries/$(PROJECT)-linux-amd64 2>/dev/null || true
 
 	@# Generate checksums
 	@echo "Generating checksums..."
@@ -49,16 +50,16 @@ release:
 	@mkdir -p releases
 
 	@# Build Linux x86_64 (static musl)
-	@echo "Building $(PROJECT)-linux-x86_64 (musl)..."
+	@echo "Building $(PROJECT)-linux-amd64 (musl)..."
 	@$(DOCKER_RUN) cargo build --release --target x86_64-unknown-linux-musl
-	@cp target/x86_64-unknown-linux-musl/release/$(PROJECT) releases/$(PROJECT)-linux-x86_64
-	@strip releases/$(PROJECT)-linux-x86_64 2>/dev/null || true
+	@cp target/x86_64-unknown-linux-musl/release/$(PROJECT) releases/$(PROJECT)-linux-amd64
+	@strip releases/$(PROJECT)-linux-amd64 2>/dev/null || true
 
 	@# Build Linux aarch64 (static musl)
-	@echo "Building $(PROJECT)-linux-aarch64 (musl)..."
+	@echo "Building $(PROJECT)-linux-arm64 (musl)..."
 	@$(DOCKER_RUN) cargo build --release --target aarch64-unknown-linux-musl
-	@cp target/aarch64-unknown-linux-musl/release/$(PROJECT) releases/$(PROJECT)-linux-aarch64
-	@strip releases/$(PROJECT)-linux-aarch64 2>/dev/null || true
+	@cp target/aarch64-unknown-linux-musl/release/$(PROJECT) releases/$(PROJECT)-linux-arm64
+	@strip releases/$(PROJECT)-linux-arm64 2>/dev/null || true
 
 	@# Generate checksums
 	@echo "Generating checksums..."
@@ -90,13 +91,19 @@ release:
 # Run tests in Docker
 test:
 	@echo "=== Running tests ==="
-	@$(DOCKER_RUN) cargo test
+	@$(DOCKER_RUN) cargo fmt --all --check
+	@$(DOCKER_RUN) cargo test --workspace --all-features --target x86_64-unknown-linux-musl
+
+# Auto-format all source files in Docker
+fmt:
+	@echo "=== Formatting source ==="
+	@$(DOCKER_RUN) cargo fmt --all
 
 # Format check and clippy in Docker
 check:
 	@echo "=== Running fmt + clippy ==="
 	@$(DOCKER_RUN) cargo fmt --all --check
-	@$(DOCKER_RUN) cargo clippy --workspace --all-targets --all-features -- -D warnings
+	@$(DOCKER_RUN) cargo clippy --workspace --all-targets --all-features --target x86_64-unknown-linux-musl -- -D warnings
 
 # Build the runtime Docker image (not the build toolchain — use casjaysdev/rust:latest for that)
 docker:
@@ -108,6 +115,7 @@ docker:
 run-gui:
 	@echo "=== Running $(PROJECT) with X11 forwarding ==="
 	@docker run --rm \
+		--name "$(PROJECT)-$$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
 		-v $(PWD):/work \
 		-w /work \
 		-e DISPLAY=$(DISPLAY) \
@@ -126,9 +134,10 @@ help:
 	@echo "TabSSH Desktop - Build System"
 	@echo ""
 	@echo "Available targets:"
-	@echo "  make build     - Build binary with Docker → ./binaries (x86_64)"
+	@echo "  make build     - Build binary with Docker → ./binaries (amd64)"
 	@echo "  make release   - Release build for all arches → ./releases"
 	@echo "  make test      - Run tests in Docker"
+	@echo "  make fmt       - Run cargo fmt --all in Docker"
 	@echo "  make check     - Run cargo fmt --check + clippy in Docker"
 	@echo "  make docker    - Build runtime Docker image"
 	@echo "  make run-gui   - Run GUI with X11 forwarding"

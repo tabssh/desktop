@@ -1,14 +1,12 @@
 //! Main application structure
 
-use crate::ui::app_state::AppState;
-use crate::ui::keyboard::{KeyboardHandler, KeyboardAction};
-use crate::ui::components::{TabBar, Toolbar, StatusBar};
-use egui::Context;
+use tabssh::ui::app_state::AppState;
+use tabssh::ui::components::{StatusBar, TabBar, Toolbar};
+use tabssh::ui::keyboard::{KeyboardAction, KeyboardHandler};
 
 pub struct TabSshApp {
     state: AppState,
     tab_bar: TabBar,
-    toolbar: Toolbar,
     status_bar: StatusBar,
 }
 
@@ -25,14 +23,15 @@ impl TabSshApp {
         Self {
             state,
             tab_bar: TabBar::new(),
-            toolbar: Toolbar,
             status_bar: StatusBar::new(),
         }
     }
 }
 
 impl eframe::App for TabSshApp {
-    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        let ctx = &ctx;
         // Handle keyboard shortcuts
         if let Some(action) = KeyboardHandler::handle_shortcuts(ctx) {
             match action {
@@ -63,19 +62,19 @@ impl eframe::App for TabSshApp {
             }
         }
 
-        egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
+        egui::Panel::top("toolbar").show(ui, |ui| {
             let _action = Toolbar::render(ui);
         });
 
-        egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
+        egui::Panel::top("tabs").show(ui, |ui| {
             let _action = self.tab_bar.render(ui);
         });
 
-        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
+        egui::Panel::bottom("status").show(ui, |ui| {
             self.status_bar.render(ui);
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             if self.state.tabs.is_empty() {
                 ui.vertical_centered(|ui| {
                     ui.add_space(100.0);

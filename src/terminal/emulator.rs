@@ -1,10 +1,10 @@
 //! Terminal emulator - high-level facade over parser, buffer, and renderer
 
-use eframe::egui;
 use super::buffer::TerminalBuffer;
 use super::parser::TerminalParser;
-use super::renderer::{TerminalRenderer, RendererConfig};
+use super::renderer::{RendererConfig, TerminalRenderer};
 use super::TerminalSize;
+use eframe::egui;
 
 /// Full terminal emulator combining parser, buffer, and renderer
 pub struct TerminalEmulator {
@@ -25,7 +25,12 @@ impl TerminalEmulator {
     }
 
     /// Create terminal emulator with explicit configuration and scrollback size
-    pub fn with_config(cols: usize, rows: usize, scrollback_size: usize, config: RendererConfig) -> Self {
+    pub fn with_config(
+        cols: usize,
+        rows: usize,
+        scrollback_size: usize,
+        config: RendererConfig,
+    ) -> Self {
         Self {
             parser: TerminalParser::new(cols as u16, rows as u16, scrollback_size),
             renderer: TerminalRenderer::new(config),

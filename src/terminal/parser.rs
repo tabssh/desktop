@@ -91,7 +91,7 @@ impl<'a> Perform for TerminalPerformer<'a> {
             0x09 => {
                 self.buffer.write_char('\t');
             }
-            0x0a | 0x0b | 0x0c => {
+            0x0a..=0x0c => {
                 self.buffer.write_char('\n');
             }
             0x0d => {
@@ -152,22 +152,18 @@ impl<'a> Perform for TerminalPerformer<'a> {
                 let col = param(1, 1).saturating_sub(1) as usize;
                 self.buffer.set_cursor(col, row);
             }
-            'J' => {
-                match param(0, 0) {
-                    0 => self.buffer.clear_to_end(),
-                    1 => self.buffer.clear_to_start(),
-                    2 | 3 => self.buffer.clear(),
-                    _ => {}
-                }
-            }
-            'K' => {
-                match param(0, 0) {
-                    0 => self.buffer.clear_line_to_end(),
-                    1 => self.buffer.clear_line_to_start(),
-                    2 => self.buffer.clear_line(),
-                    _ => {}
-                }
-            }
+            'J' => match param(0, 0) {
+                0 => self.buffer.clear_to_end(),
+                1 => self.buffer.clear_to_start(),
+                2 | 3 => self.buffer.clear(),
+                _ => {}
+            },
+            'K' => match param(0, 0) {
+                0 => self.buffer.clear_line_to_end(),
+                1 => self.buffer.clear_line_to_start(),
+                2 => self.buffer.clear_line(),
+                _ => {}
+            },
             'L' => {
                 let n = param(0, 1) as usize;
                 self.buffer.insert_lines(n);
@@ -434,12 +430,10 @@ impl<'a> TerminalPerformer<'a> {
                     _ => {}
                 }
             } else {
-                match *param {
-                    4 => self.buffer.set_insert_mode(enable),
-                    _ => {}
+                if *param == 4 {
+                    self.buffer.set_insert_mode(enable)
                 }
             }
         }
     }
 }
-

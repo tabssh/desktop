@@ -2,16 +2,16 @@
 
 mod active_session;
 mod auth;
-mod connection;
 mod config_parser;
+mod connection;
 mod forwarding;
 mod session_manager;
 
 pub use active_session::{ActiveSession, SessionEvent};
-pub use auth::{Credentials, find_default_keys};
+pub use auth::Credentials;
+pub use config_parser::{HostConfig, SshConfigParser};
 pub use connection::SshConnection;
-pub use config_parser::{SshConfigParser, HostConfig};
-pub use forwarding::{ForwardingManager, PortForward, ForwardType};
+pub use forwarding::{ForwardType, ForwardingManager, PortForward};
 pub use session_manager::SessionManager;
 
 /// SSH authentication type

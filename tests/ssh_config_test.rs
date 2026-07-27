@@ -27,16 +27,16 @@ Host *
 
     // Test specific host
     let myserver = parser.get_config("myserver").unwrap();
-    assert_eq!(myserver.hostname,Some("server.example.com".to_string()));
-    assert_eq!(myserver.port,Some(2222));
-    assert_eq!(myserver.user,Some("admin".to_string()));
-    assert_eq!(myserver.compression,Some(true));
+    assert_eq!(myserver.hostname, Some("server.example.com".to_string()));
+    assert_eq!(myserver.port, Some(2222));
+    assert_eq!(myserver.user, Some("admin".to_string()));
+    assert_eq!(myserver.compression, Some(true));
     assert!(!myserver.local_forward.is_empty());
     assert!(!myserver.dynamic_forward.is_empty());
 
     // Test wildcard pattern
     let internal = parser.get_config("web.internal").unwrap();
-    assert_eq!(internal.proxy_jump,Some("bastion".to_string()));
+    assert_eq!(internal.proxy_jump, Some("bastion".to_string()));
 }
 
 #[test]

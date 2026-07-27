@@ -1,9 +1,9 @@
 //! Main application state
 
+use crate::config::themes::ThemeManager;
 use crate::ssh::SessionManager;
 use crate::storage::database::Database;
 use crate::storage::settings::Settings;
-use crate::config::themes::ThemeManager;
 use crate::ui::notifications::NotificationManager;
 use anyhow::Result;
 
@@ -39,7 +39,7 @@ impl AppState {
         let runtime = std::sync::Arc::new(tokio::runtime::Runtime::new()?);
         let session_manager = SessionManager::new(runtime);
         let notification_manager = NotificationManager::new();
-        
+
         Ok(Self {
             db,
             settings,
@@ -50,7 +50,7 @@ impl AppState {
             tabs: Vec::new(),
         })
     }
-    
+
     pub fn add_terminal_tab(&mut self, session_id: String, title: String) {
         self.tabs.push(Tab {
             id: uuid::Uuid::new_v4().to_string(),
@@ -59,7 +59,7 @@ impl AppState {
         });
         self.active_tab = self.tabs.len() - 1;
     }
-    
+
     pub fn add_sftp_tab(&mut self, session_id: String, title: String) {
         self.tabs.push(Tab {
             id: uuid::Uuid::new_v4().to_string(),
@@ -68,24 +68,24 @@ impl AppState {
         });
         self.active_tab = self.tabs.len() - 1;
     }
-    
+
     pub fn close_tab(&mut self, index: usize) {
         if index < self.tabs.len() {
             self.tabs.remove(index);
-            if self.active_tab >= self.tabs.len() && !self.tabs.is_empty(){
+            if self.active_tab >= self.tabs.len() && !self.tabs.is_empty() {
                 self.active_tab = self.tabs.len() - 1;
             }
         }
     }
-    
+
     pub fn next_tab(&mut self) {
-        if !self.tabs.is_empty(){
+        if !self.tabs.is_empty() {
             self.active_tab = (self.active_tab + 1) % self.tabs.len();
         }
     }
-    
+
     pub fn previous_tab(&mut self) {
-        if !self.tabs.is_empty(){
+        if !self.tabs.is_empty() {
             self.active_tab = if self.active_tab == 0 {
                 self.tabs.len() - 1
             } else {
@@ -93,7 +93,7 @@ impl AppState {
             };
         }
     }
-    
+
     pub fn save_settings(&self) -> Result<()> {
         self.settings.save(&self.db)?;
         Ok(())

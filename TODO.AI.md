@@ -41,6 +41,8 @@ The phases below are dependency-ordered: `Phase 0 → Phase 1` is hard (you cann
 
 **Acceptance:** `make build` (which calls `cargo build --release` inside the `tabssh-builder` docker image) exits 0.
 
+- [ ] Revisit `audit.toml` ignores once upstream fixes land — `quick-xml` 0.39.4 (RUSTSEC-2026-0195, RUSTSEC-2026-0194) is pinned by `wayland-scanner` via `eframe`/`winit`/`smithay-client-toolkit` with no newer `eframe` available yet; `rsa` 0.10.0-rc.18 (RUSTSEC-2023-0071, Marvin Attack) has no fixed release, pulled in via `russh`/`ssh-key` (2026-07-27 cargo audit)
+
 ---
 
 ## Phase 1 — Tier-1 SSH-client viability
@@ -54,6 +56,7 @@ Goal: a power user can daily-drive desktop for everyday SSH/SFTP work.
 - [ ] Per-connection env vars — DB column `env_vars`, sent via `russh::Channel::env`
 - [ ] Always-on keepalive (60s, count-max 3) — apply unconditionally to every russh session per Issue #166
 - [ ] Centralised connection-error dialog with **Copy** button — clipboard via `arboard` (Issue #167 equivalent)
+- [ ] Wire host-key verification (TOFU/MITM prompt) into the connect flow — `HostKeyInfo`, `HostKeyInfo::from_public_key`, and `verify_host_key` (`src/ssh/connection.rs`) are fully implemented but have zero call sites (2026-07-27 clippy dead-code audit)
 
 ### 1.2 Universal SSH key support
 - [ ] Parse OpenSSH v1 (`-----BEGIN OPENSSH PRIVATE KEY-----`)
@@ -63,8 +66,10 @@ Goal: a power user can daily-drive desktop for everyday SSH/SFTP work.
 - [ ] Encrypted-passphrase round-trip (bcrypt KDF for OpenSSH v1)
 - [ ] Export public key (OpenSSH line format)
 - [ ] SHA-256 fingerprint helper
+- [ ] Wire key discovery/loading into the connect flow — `find_default_keys`, `read_key`, `is_key_encrypted` (`src/ssh/auth.rs`) are fully implemented but have zero call sites (2026-07-27 clippy dead-code audit)
 
 ### 1.3 SFTP browser
+- [ ] Wire `SftpClient` (`src/sftp/client.rs`) into `SftpBrowser`/the active session — the transport layer (list/upload/download/mkdir/rmdir/rename/stat/chmod) is fully implemented but nothing calls it yet; `SftpBrowser` (`src/sftp/browser.rs`) is UI-state-only with no network I/O (2026-07-27 clippy dead-code audit)
 - [ ] Get the dual-pane browser working with the fixed `russh-sftp` calls
 - [ ] Remote file editor inline (open → edit in egui textarea → save back) — Wave 1.7 equivalent
 - [ ] chmod editor dialog — Wave 1.8 equivalent
@@ -83,7 +88,7 @@ Goal: a power user can daily-drive desktop for everyday SSH/SFTP work.
 - [ ] Saved rules per host
 - [ ] Quick start/stop toggle
 - [ ] Background tunnels — run forwards without an attached terminal session (Wave 3.3)
-- [ ] ProxyJump / `connect-via` cascading (multi-hop)
+- [ ] ProxyJump / `connect-via` cascading (multi-hop) — `connect_through_jump_host` (`src/ssh/connection.rs`) is already implemented but not yet called from the connect flow (2026-07-27 clippy dead-code audit)
 
 ### 1.5 SSH config
 - [ ] Read `~/.ssh/config` directly via `ssh2-config` — don't import a copy; the desktop should reflect the user's existing setup live

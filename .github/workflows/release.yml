@@ -72,8 +72,8 @@ jobs:
             cargo build --release --target "$TARGET"
 
             case "$TARGET" in
-              x86_64-unknown-linux-musl)  ARTIFACT="${CRATE}-linux-x86_64" ;;
-              aarch64-unknown-linux-musl) ARTIFACT="${CRATE}-linux-aarch64" ;;
+              x86_64-unknown-linux-musl)  ARTIFACT="${CRATE}-linux-amd64" ;;
+              aarch64-unknown-linux-musl) ARTIFACT="${CRATE}-linux-arm64" ;;
             esac
 
             cp "target/$TARGET/release/$CRATE" "dist/$ARTIFACT"

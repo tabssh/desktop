@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use russh::client::{self, Handle};
-use russh_keys::key;
+use russh::keys::PublicKey;
 use russh::{ChannelMsg, Disconnect};
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -34,20 +34,25 @@ struct SessionHandler {
 
 impl SessionHandler {
     fn new(host: &str) -> Self {
-        Self { host: host.to_string() }
+        Self {
+            host: host.to_string(),
+        }
     }
 }
 
-#[async_trait::async_trait]
 impl client::Handler for SessionHandler {
     type Error = anyhow::Error;
 
     async fn check_server_key(
-        self,
-        server_public_key: &key::PublicKey,
-    ) -> Result<(Self, bool), Self::Error> {
-        log::info!("Server key for {}: {}", self.host, server_public_key.fingerprint());
-        Ok((self, true))
+        &mut self,
+        server_public_key: &PublicKey,
+    ) -> Result<bool, Self::Error> {
+        log::info!(
+            "Server key for {}: {}",
+            self.host,
+            server_public_key.fingerprint(Default::default())
+        );
+        Ok(true)
     }
 }
 
@@ -77,14 +82,9 @@ impl ActiveSession {
         let session_user = username.clone();
 
         tokio::spawn(async move {
-            if let Err(e) = run_session_password(
-                &host,
-                port,
-                &username,
-                &password,
-                event_tx,
-                command_rx,
-            ).await {
+            if let Err(e) =
+                run_session_password(&host, port, &username, &password, event_tx, command_rx).await
+            {
                 log::error!("Session error: {}", e);
             }
         });
@@ -123,7 +123,9 @@ impl ActiveSession {
                 passphrase.as_deref(),
                 event_tx,
                 command_rx,
-            ).await {
+            )
+            .await
+            {
                 log::error!("Session error: {}", e);
             }
         });
@@ -179,10 +181,12 @@ async fn run_session_password(
     let mut handle = client::connect(Arc::new(config), &addr, handler).await?;
 
     log::info!("Authenticating as {}", username);
-    let authenticated = handle.authenticate_password(username, password).await?;
+    let auth_result = handle.authenticate_password(username, password).await?;
 
-    if !authenticated {
-        let _ = event_tx.send(SessionEvent::Error("Authentication failed".to_string())).await;
+    if !auth_result.success() {
+        let _ = event_tx
+            .send(SessionEvent::Error("Authentication failed".to_string()))
+            .await;
         return Err(anyhow::anyhow!("Authentication failed"));
     }
 
@@ -211,12 +215,19 @@ async fn run_session_key(
 
     log::info!("Authenticating with key as {}", username);
     let key_data = tokio::fs::read_to_string(key_path).await?;
-    let key_pair = russh_keys::decode_secret_key(&key_data, passphrase)?;
+    let key_pair = russh::keys::decode_secret_key(&key_data, passphrase)?;
 
-    let authenticated = handle.authenticate_publickey(username, Arc::new(key_pair)).await?;
+    let auth_result = handle
+        .authenticate_publickey(
+            username,
+            russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key_pair), None),
+        )
+        .await?;
 
-    if !authenticated {
-        let _ = event_tx.send(SessionEvent::Error("Key authentication failed".to_string())).await;
+    if !auth_result.success() {
+        let _ = event_tx
+            .send(SessionEvent::Error("Key authentication failed".to_string()))
+            .await;
         return Err(anyhow::anyhow!("Key authentication failed"));
     }
 
@@ -231,7 +242,9 @@ async fn run_shell_session(
     log::info!("Opening shell channel");
     let mut channel = handle.channel_open_session().await?;
 
-    channel.request_pty(false, "xterm-256color", 80, 24, 0, 0, &[]).await?;
+    channel
+        .request_pty(false, "xterm-256color", 80, 24, 0, 0, &[])
+        .await?;
     channel.request_shell(false).await?;
 
     let _ = event_tx.send(SessionEvent::Connected).await;
@@ -278,6 +291,8 @@ async fn run_shell_session(
         }
     }
 
-    let _ = handle.disconnect(Disconnect::ByApplication, "Session ended", "en").await;
+    let _ = handle
+        .disconnect(Disconnect::ByApplication, "Session ended", "en")
+        .await;
     Ok(())
 }

@@ -101,7 +101,9 @@ impl ForwardingManager {
 
         log::info!(
             "Local forward: {} -> {}:{}",
-            listen_addr, forward.remote_host, forward.remote_port
+            listen_addr,
+            forward.remote_host,
+            forward.remote_port
         );
 
         let remote_host = forward.remote_host.clone();

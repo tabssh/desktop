@@ -1,32 +1,32 @@
 //! Professional UI Components Library
 //! Reusable, styled UI widgets for consistent look and feel
 
-use eframe::egui::{self, Color32, RichText, Rounding, Stroke, Vec2};
+use eframe::egui::{self, Color32, CornerRadius, RichText, Stroke, Vec2};
 
 /// Color palette for the application
 pub mod colors {
     use super::Color32;
 
     // Primary colors
-    pub const PRIMARY: Color32 = Color32::from_rgb(59, 130, 246);      // Blue
+    pub const PRIMARY: Color32 = Color32::from_rgb(59, 130, 246); // Blue
     pub const PRIMARY_HOVER: Color32 = Color32::from_rgb(37, 99, 235);
     pub const PRIMARY_DARK: Color32 = Color32::from_rgb(29, 78, 216);
 
     // Secondary colors
-    pub const SECONDARY: Color32 = Color32::from_rgb(100, 116, 139);   // Slate
+    pub const SECONDARY: Color32 = Color32::from_rgb(100, 116, 139); // Slate
     pub const SECONDARY_HOVER: Color32 = Color32::from_rgb(71, 85, 105);
 
     // Status colors
-    pub const SUCCESS: Color32 = Color32::from_rgb(34, 197, 94);       // Green
-    pub const WARNING: Color32 = Color32::from_rgb(234, 179, 8);       // Yellow
-    pub const DANGER: Color32 = Color32::from_rgb(239, 68, 68);        // Red
-    pub const INFO: Color32 = Color32::from_rgb(14, 165, 233);         // Sky
+    pub const SUCCESS: Color32 = Color32::from_rgb(34, 197, 94); // Green
+    pub const WARNING: Color32 = Color32::from_rgb(234, 179, 8); // Yellow
+    pub const DANGER: Color32 = Color32::from_rgb(239, 68, 68); // Red
+    pub const INFO: Color32 = Color32::from_rgb(14, 165, 233); // Sky
 
     // Background colors
-    pub const BG_PRIMARY: Color32 = Color32::from_rgb(15, 23, 42);     // Dark slate
-    pub const BG_SECONDARY: Color32 = Color32::from_rgb(30, 41, 59);   // Lighter slate
-    pub const BG_TERTIARY: Color32 = Color32::from_rgb(51, 65, 85);    // Even lighter
-    pub const BG_SURFACE: Color32 = Color32::from_rgb(71, 85, 105);    // Surface
+    pub const BG_PRIMARY: Color32 = Color32::from_rgb(15, 23, 42); // Dark slate
+    pub const BG_SECONDARY: Color32 = Color32::from_rgb(30, 41, 59); // Lighter slate
+    pub const BG_TERTIARY: Color32 = Color32::from_rgb(51, 65, 85); // Even lighter
+    pub const BG_SURFACE: Color32 = Color32::from_rgb(71, 85, 105); // Surface
 
     // Text colors
     pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(248, 250, 252);
@@ -64,15 +64,27 @@ pub enum ButtonStyle {
 pub fn button(ui: &mut egui::Ui, text: &str, style: ButtonStyle) -> egui::Response {
     let (bg, _bg_hover, text_color) = match style {
         ButtonStyle::Primary => (colors::PRIMARY, colors::PRIMARY_HOVER, colors::TEXT_PRIMARY),
-        ButtonStyle::Secondary => (colors::BG_TERTIARY, colors::BG_SURFACE, colors::TEXT_PRIMARY),
-        ButtonStyle::Danger => (colors::DANGER, Color32::from_rgb(220, 38, 38), colors::TEXT_PRIMARY),
-        ButtonStyle::Ghost => (Color32::TRANSPARENT, colors::BG_TERTIARY, colors::TEXT_SECONDARY),
+        ButtonStyle::Secondary => (
+            colors::BG_TERTIARY,
+            colors::BG_SURFACE,
+            colors::TEXT_PRIMARY,
+        ),
+        ButtonStyle::Danger => (
+            colors::DANGER,
+            Color32::from_rgb(220, 38, 38),
+            colors::TEXT_PRIMARY,
+        ),
+        ButtonStyle::Ghost => (
+            Color32::TRANSPARENT,
+            colors::BG_TERTIARY,
+            colors::TEXT_SECONDARY,
+        ),
     };
 
     let button = egui::Button::new(RichText::new(text).color(text_color))
         .fill(bg)
         .stroke(Stroke::NONE)
-        .rounding(Rounding::same(6.0))
+        .corner_radius(CornerRadius::same(6))
         .min_size(Vec2::new(0.0, 32.0));
 
     let response = ui.add(button);
@@ -112,16 +124,24 @@ pub fn toggle(ui: &mut egui::Ui, enabled: &mut bool) -> egui::Response {
         let how_on = ui.ctx().animate_bool(response.id, *enabled);
 
         let bg_color = Color32::from_rgb(
-            (colors::BG_TERTIARY.r() as f32 + (colors::PRIMARY.r() as f32 - colors::BG_TERTIARY.r() as f32) * how_on) as u8,
-            (colors::BG_TERTIARY.g() as f32 + (colors::PRIMARY.g() as f32 - colors::BG_TERTIARY.g() as f32) * how_on) as u8,
-            (colors::BG_TERTIARY.b() as f32 + (colors::PRIMARY.b() as f32 - colors::BG_TERTIARY.b() as f32) * how_on) as u8,
+            (colors::BG_TERTIARY.r() as f32
+                + (colors::PRIMARY.r() as f32 - colors::BG_TERTIARY.r() as f32) * how_on)
+                as u8,
+            (colors::BG_TERTIARY.g() as f32
+                + (colors::PRIMARY.g() as f32 - colors::BG_TERTIARY.g() as f32) * how_on)
+                as u8,
+            (colors::BG_TERTIARY.b() as f32
+                + (colors::PRIMARY.b() as f32 - colors::BG_TERTIARY.b() as f32) * how_on)
+                as u8,
         );
 
         let circle_x = rect.left() + 12.0 + how_on * 20.0;
         let circle_center = egui::pos2(circle_x, rect.center().y);
 
-        ui.painter().rect_filled(rect, Rounding::same(12.0), bg_color);
-        ui.painter().circle_filled(circle_center, 8.0, colors::TEXT_PRIMARY);
+        ui.painter()
+            .rect_filled(rect, CornerRadius::same(12), bg_color);
+        ui.painter()
+            .circle_filled(circle_center, 8.0, colors::TEXT_PRIMARY);
     }
 
     if response.hovered() {
@@ -137,26 +157,27 @@ pub fn labeled_toggle(ui: &mut egui::Ui, label: &str, enabled: &mut bool) -> egu
         ui.label(RichText::new(label).color(colors::TEXT_PRIMARY));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             toggle(ui, enabled)
-        }).inner
-    }).inner
+        })
+        .inner
+    })
+    .inner
 }
 
 /// Styled checkbox
 pub fn checkbox(ui: &mut egui::Ui, checked: &mut bool, label: &str) -> egui::Response {
-    let response = ui.checkbox(checked, RichText::new(label).color(colors::TEXT_PRIMARY));
-    response
+    ui.checkbox(checked, RichText::new(label).color(colors::TEXT_PRIMARY))
 }
 
 /// Dropdown/ComboBox component
-pub fn dropdown<'a, T: ToString + PartialEq>(
+pub fn dropdown<T: ToString + PartialEq>(
     ui: &mut egui::Ui,
     id: &str,
     selected: &mut T,
-    options: &'a [T],
+    options: &[T],
 ) -> egui::Response {
     let selected_text = selected.to_string();
 
-    egui::ComboBox::from_id_source(id)
+    egui::ComboBox::from_id_salt(id)
         .selected_text(RichText::new(&selected_text).color(colors::TEXT_PRIMARY))
         .width(200.0)
         .show_ui(ui, |ui| {
@@ -171,18 +192,18 @@ pub fn dropdown<'a, T: ToString + PartialEq>(
 }
 
 /// Labeled dropdown
-pub fn labeled_dropdown<'a, T: ToString + PartialEq + Clone>(
+pub fn labeled_dropdown<T: ToString + PartialEq + Clone>(
     ui: &mut egui::Ui,
     label: &str,
     id: &str,
     selected: &mut T,
-    options: &'a [T],
+    options: &[T],
 ) {
     ui.horizontal(|ui| {
         ui.label(RichText::new(label).color(colors::TEXT_PRIMARY));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let selected_text = selected.to_string();
-            egui::ComboBox::from_id_source(id)
+            egui::ComboBox::from_id_salt(id)
                 .selected_text(RichText::new(&selected_text).color(colors::TEXT_PRIMARY))
                 .width(200.0)
                 .show_ui(ui, |ui| {
@@ -235,7 +256,7 @@ pub fn number_input(ui: &mut egui::Ui, value: &mut u16, min: u16, max: u16) -> e
         egui::TextEdit::singleline(&mut text)
             .text_color(colors::TEXT_PRIMARY)
             .desired_width(80.0)
-            .margin(egui::vec2(8.0, 6.0))
+            .margin(egui::vec2(8.0, 6.0)),
     );
 
     if response.changed() {
@@ -260,7 +281,12 @@ pub fn labeled_number(ui: &mut egui::Ui, label: &str, value: &mut u16, min: u16,
 /// Section header
 pub fn section_header(ui: &mut egui::Ui, title: &str) {
     ui.add_space(spacing::LG);
-    ui.label(RichText::new(title).color(colors::TEXT_PRIMARY).strong().size(16.0));
+    ui.label(
+        RichText::new(title)
+            .color(colors::TEXT_PRIMARY)
+            .strong()
+            .size(16.0),
+    );
     ui.add_space(spacing::SM);
     ui.separator();
     ui.add_space(spacing::SM);
@@ -269,16 +295,20 @@ pub fn section_header(ui: &mut egui::Ui, title: &str) {
 /// Subsection header
 pub fn subsection_header(ui: &mut egui::Ui, title: &str) {
     ui.add_space(spacing::MD);
-    ui.label(RichText::new(title).color(colors::TEXT_SECONDARY).size(13.0));
+    ui.label(
+        RichText::new(title)
+            .color(colors::TEXT_SECONDARY)
+            .size(13.0),
+    );
     ui.add_space(spacing::XS);
 }
 
 /// Card/Panel container
 pub fn card(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui)) {
-    egui::Frame::none()
+    egui::Frame::NONE
         .fill(colors::BG_SECONDARY)
-        .rounding(Rounding::same(8.0))
-        .inner_margin(egui::Margin::same(spacing::LG))
+        .corner_radius(CornerRadius::same(8))
+        .inner_margin(egui::Margin::same(spacing::LG as i8))
         .stroke(Stroke::new(1.0, colors::BORDER))
         .show(ui, add_contents);
 }
@@ -325,18 +355,26 @@ pub fn icon_button(ui: &mut egui::Ui, icon: &str, tooltip: &str) -> egui::Respon
 
 /// Sidebar navigation item
 pub fn nav_item(ui: &mut egui::Ui, icon: &str, label: &str, selected: bool) -> egui::Response {
-    let bg = if selected { colors::BG_TERTIARY } else { Color32::TRANSPARENT };
-    let text_color = if selected { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY };
+    let bg = if selected {
+        colors::BG_TERTIARY
+    } else {
+        Color32::TRANSPARENT
+    };
+    let text_color = if selected {
+        colors::TEXT_PRIMARY
+    } else {
+        colors::TEXT_SECONDARY
+    };
 
     let button = egui::Button::new(
         RichText::new(format!("{}  {}", icon, label))
             .color(text_color)
-            .size(14.0)
+            .size(14.0),
     )
-        .fill(bg)
-        .stroke(Stroke::NONE)
-        .rounding(Rounding::same(6.0))
-        .min_size(Vec2::new(ui.available_width(), 36.0));
+    .fill(bg)
+    .stroke(Stroke::NONE)
+    .corner_radius(CornerRadius::same(6))
+    .min_size(Vec2::new(ui.available_width(), 36.0));
 
     let response = ui.add(button);
 
@@ -360,9 +398,18 @@ pub fn empty_state(ui: &mut egui::Ui, icon: &str, title: &str, description: &str
         ui.add_space(spacing::XXL);
         ui.label(RichText::new(icon).size(48.0).color(colors::TEXT_MUTED));
         ui.add_space(spacing::MD);
-        ui.label(RichText::new(title).size(18.0).color(colors::TEXT_PRIMARY).strong());
+        ui.label(
+            RichText::new(title)
+                .size(18.0)
+                .color(colors::TEXT_PRIMARY)
+                .strong(),
+        );
         ui.add_space(spacing::XS);
-        ui.label(RichText::new(description).size(14.0).color(colors::TEXT_SECONDARY));
+        ui.label(
+            RichText::new(description)
+                .size(14.0)
+                .color(colors::TEXT_SECONDARY),
+        );
         ui.add_space(spacing::XXL);
     });
 }
@@ -377,9 +424,12 @@ pub fn form_row(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui)) {
 }
 
 /// Tooltip wrapper
-pub fn with_tooltip<R>(ui: &mut egui::Ui, _tooltip: &str, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let response = add_contents(ui);
-    response
+pub fn with_tooltip<R>(
+    ui: &mut egui::Ui,
+    _tooltip: &str,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    add_contents(ui)
 }
 
 /// Tab bar widget — displays open session tabs
@@ -390,7 +440,10 @@ pub struct TabBar {
 
 impl TabBar {
     pub fn new() -> Self {
-        Self { tabs: Vec::new(), active: 0 }
+        Self {
+            tabs: Vec::new(),
+            active: 0,
+        }
     }
 
     /// Render tabs and return an action if the user interacted
@@ -413,7 +466,9 @@ impl TabBar {
 }
 
 impl Default for TabBar {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Action emitted by the tab bar
@@ -478,5 +533,7 @@ impl StatusBar {
 }
 
 impl Default for StatusBar {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

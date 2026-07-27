@@ -7,17 +7,12 @@ pub use themes::Theme;
 use serde::{Deserialize, Serialize};
 
 /// Theme mode selection
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum ThemeMode {
+    #[default]
     Dark,
     Light,
     System,
-}
-
-impl Default for ThemeMode {
-    fn default() -> Self {
-        Self::Dark
-    }
 }
 
 impl std::fmt::Display for ThemeMode {
@@ -94,15 +89,10 @@ impl Default for AppConfig {
 }
 
 /// Cursor style for terminal
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum CursorStyle {
+    #[default]
     Block,
     Beam,
     Underline,
-}
-
-impl Default for CursorStyle {
-    fn default() -> Self {
-        Self::Block
-    }
 }

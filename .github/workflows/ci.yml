@@ -68,11 +68,11 @@ jobs:
           CRATE_NAME=$(grep '^name' Cargo.toml | head -1 | sed 's/name = "\(.*\)"/\1/')
           mkdir -p dist
           cp "target/x86_64-unknown-linux-musl/release/${CRATE_NAME}" \
-            "dist/${CRATE_NAME}-linux-x86_64"
+            "dist/${CRATE_NAME}-linux-amd64"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
-          name: ${{ steps.crate.outputs.name }}-linux-x86_64-${{ github.sha }}
+          name: ${{ steps.crate.outputs.name }}-linux-amd64-${{ github.sha }}
           path: dist/
           retention-days: 7
 
@@ -98,8 +98,9 @@ jobs:
       - name: Verify all third-party actions are pinned to a 40-char SHA
         run: |
           set -eo pipefail
-          bad=$(grep -RhnE '^\s*uses:\s*[^@]+@(v?[0-9]|main|master)' \
-            .github/ .gitea/ .forgejo/ 2>/dev/null || true)
+          bad=$(grep -RhoE '^\s*-?\s*uses:\s*[^@[:space:]]+@[^[:space:]]+' \
+            .github/ .gitea/ .forgejo/ 2>/dev/null \
+            | grep -vE '@[0-9a-f]{40}$' || true)
           if [[ -n "$bad" ]]; then
             echo "::error::Unpinned actions found (must be 40-char SHAs):"
             echo "$bad"

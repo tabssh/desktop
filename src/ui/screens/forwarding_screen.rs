@@ -1,7 +1,7 @@
 //! Port forwarding management screen
 
+use crate::ssh::{ForwardType, PortForward};
 use egui::{Context, Ui};
-use crate::ssh::{PortForward, ForwardType};
 
 pub struct ForwardingScreen {
     forwards: Vec<PortForward>,
@@ -21,25 +21,25 @@ impl ForwardingScreen {
             forward_type: ForwardType::Local,
         }
     }
-    
+
     pub fn render(&mut self, _ctx: &Context, ui: &mut Ui) -> Option<ForwardingAction> {
         let mut action = None;
-        
+
         ui.heading("Port Forwarding");
         ui.separator();
-        
+
         // Add new forward
         ui.group(|ui| {
             ui.label("Add New Forward");
-            
+
             ui.horizontal(|ui| {
                 ui.label("Type:");
                 ui.radio_value(&mut self.forward_type, ForwardType::Local, "Local (-L)");
                 ui.radio_value(&mut self.forward_type, ForwardType::Remote, "Remote (-R)");
                 ui.radio_value(&mut self.forward_type, ForwardType::Dynamic, "Dynamic (-D)");
             });
-            
-            if matches!(self.forward_type,ForwardType::Dynamic){
+
+            if matches!(self.forward_type, ForwardType::Dynamic) {
                 ui.horizontal(|ui| {
                     ui.label("Listen port:");
                     ui.text_edit_singleline(&mut self.edit_local_port);
@@ -54,7 +54,7 @@ impl ForwardingScreen {
                     ui.text_edit_singleline(&mut self.edit_remote_port);
                 });
             }
-            
+
             if ui.button("➕ Add Forward").clicked() {
                 if let Ok(local_port) = self.edit_local_port.parse::<u16>() {
                     let forward = match self.forward_type {
@@ -82,21 +82,21 @@ impl ForwardingScreen {
                         }
                         ForwardType::Dynamic => Some(PortForward::new_dynamic(local_port)),
                     };
-                    
+
                     if let Some(fwd) = forward {
                         action = Some(ForwardingAction::Add(fwd));
                     }
                 }
             }
         });
-        
+
         ui.separator();
-        
+
         // List existing forwards
         ui.heading("Active Forwards");
-        
+
         let mut to_remove = None;
-        
+
         egui::ScrollArea::vertical().show(ui, |ui| {
             for (idx, forward) in self.forwards.iter().enumerate() {
                 ui.horizontal(|ui| {
@@ -105,12 +105,12 @@ impl ForwardingScreen {
                         ForwardType::Remote => "📤",
                         ForwardType::Dynamic => "🔄",
                     };
-                    
+
                     ui.label(type_icon);
-                    
+
                     let status = if forward.active { "🟢" } else { "🔴" };
                     ui.label(status);
-                    
+
                     let desc = match forward.forward_type {
                         ForwardType::Dynamic => {
                             format!("SOCKS proxy on: {}", forward.listen_port)
@@ -118,32 +118,30 @@ impl ForwardingScreen {
                         _ => {
                             format!(
                                 ":{} → {}:{}",
-                                forward.listen_port,
-                                forward.remote_host,
-                                forward.remote_port
+                                forward.listen_port, forward.remote_host, forward.remote_port
                             )
                         }
                     };
-                    
+
                     ui.label(desc);
-                    
+
                     if ui.button("🗑 Remove").clicked() {
                         to_remove = Some(idx);
                     }
                 });
             }
         });
-        
+
         if let Some(idx) = to_remove {
             if idx < self.forwards.len() {
                 let forward = self.forwards.remove(idx);
                 action = Some(ForwardingAction::Remove(forward.id));
             }
         }
-        
+
         action
     }
-    
+
     pub fn set_forwards(&mut self, forwards: Vec<PortForward>) {
         self.forwards = forwards;
     }

@@ -2,8 +2,7 @@
 
 use anyhow::{anyhow, Result};
 use russh::client::{self, Handle};
-use russh_keys::key;
-use russh_keys::PublicKeyBase64;
+use russh::keys::{PublicKey, PublicKeyBase64};
 use russh::{Channel, ChannelId, Disconnect};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -12,6 +11,10 @@ use super::{ConnectionConfig, Credentials};
 use crate::storage::Database;
 
 /// Host key information for verification
+///
+/// Implemented per IDEA.md's host-key-verification/TOFU requirement but not
+/// yet wired into the connect flow — see TODO.AI.md Phase 1.1.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct HostKeyInfo {
     pub host: String,
@@ -22,10 +25,11 @@ pub struct HostKeyInfo {
 }
 
 impl HostKeyInfo {
-    pub fn from_public_key(host: &str, port: u16, key: &key::PublicKey) -> Self {
-        let fingerprint = key.fingerprint();
-        let key_type = key.name().to_string();
-        
+    #[allow(dead_code)]
+    pub fn from_public_key(host: &str, port: u16, key: &PublicKey) -> Self {
+        let fingerprint = key.fingerprint(Default::default()).to_string();
+        let key_type = key.algorithm().to_string();
+
         Self {
             host: host.to_string(),
             port,
@@ -37,14 +41,18 @@ impl HostKeyInfo {
 }
 
 /// Verify host key against known hosts in database
+///
+/// Implemented per IDEA.md's host-key-verification/TOFU requirement but not
+/// yet wired into the connect flow — see TODO.AI.md Phase 1.1.
+#[allow(dead_code)]
 pub async fn verify_host_key(
     host: &str,
     port: u16,
-    key: &key::PublicKey,
+    key: &PublicKey,
     database: Option<&Database>,
 ) -> Result<bool> {
     let key_info = HostKeyInfo::from_public_key(host, port, key);
-    
+
     // If no database, accept (for testing/initial connection)
     let db = match database {
         Some(d) => d,
@@ -53,7 +61,7 @@ pub async fn verify_host_key(
             return Ok(true);
         }
     };
-    
+
     // Check if host is known
     match db.get_known_host(&key_info.host, key_info.port)? {
         Some(known_key) => {
@@ -67,7 +75,8 @@ pub async fn verify_host_key(
                 // MITM ATTACK DETECTED!
                 log::error!(
                     "⚠️  HOST KEY MISMATCH for {}:{} - Possible MITM attack!",
-                    host, port
+                    host,
+                    port
                 );
                 log::error!("Expected: {}", known_key.fingerprint);
                 log::error!("Got:      {}", key_info.fingerprint);
@@ -80,7 +89,12 @@ pub async fn verify_host_key(
         }
         None => {
             // First time seeing this host - should prompt user
-            log::info!("New host {}:{} with fingerprint: {}", host, port, key_info.fingerprint);
+            log::info!(
+                "New host {}:{} with fingerprint: {}",
+                host,
+                port,
+                key_info.fingerprint
+            );
             // For now, auto-accept and store (in production, should show dialog)
             db.add_known_host(
                 &key_info.host,
@@ -98,7 +112,7 @@ pub async fn verify_host_key(
 /// SSH client handler for russh callbacks
 pub struct SshClientHandler {
     host: String,
-    server_public_key: Option<key::PublicKey>,
+    server_public_key: Option<PublicKey>,
 }
 
 impl SshClientHandler {
@@ -110,21 +124,20 @@ impl SshClientHandler {
     }
 }
 
-#[async_trait::async_trait]
 impl client::Handler for SshClientHandler {
     type Error = anyhow::Error;
 
     async fn check_server_key(
-        mut self,
-        server_public_key: &key::PublicKey,
-    ) -> Result<(Self, bool), Self::Error> {
+        &mut self,
+        server_public_key: &PublicKey,
+    ) -> Result<bool, Self::Error> {
         log::info!(
             "Server key for {}: {}",
             self.host,
-            server_public_key.fingerprint()
+            server_public_key.fingerprint(Default::default())
         );
         self.server_public_key = Some(server_public_key.clone());
-        Ok((self, true))
+        Ok(true)
     }
 }
 
@@ -137,10 +150,7 @@ pub struct SshConnection {
 
 impl SshConnection {
     /// Connect to an SSH server with password authentication
-    pub async fn connect_password(
-        config: ConnectionConfig,
-        password: &str,
-    ) -> Result<Self> {
+    pub async fn connect_password(config: ConnectionConfig, password: &str) -> Result<Self> {
         let ssh_config = client::Config {
             inactivity_timeout: Some(std::time::Duration::from_secs(config.keepalive as u64)),
             ..Default::default()
@@ -150,15 +160,20 @@ impl SshConnection {
         log::info!("Connecting to {}", addr);
 
         let handler = SshClientHandler::new(&config.host);
-        let mut handle = client::connect(Arc::new(ssh_config), &addr, handler).await?;
+        let mut handle = tokio::time::timeout(
+            std::time::Duration::from_secs(config.timeout as u64),
+            client::connect(Arc::new(ssh_config), &addr, handler),
+        )
+        .await
+        .map_err(|_| anyhow!("Connection to {} timed out after {}s", addr, config.timeout))??;
 
         log::info!("Connected, authenticating as {}", config.username);
 
-        let authenticated = handle
+        let auth_result = handle
             .authenticate_password(&config.username, password)
             .await?;
 
-        if !authenticated {
+        if !auth_result.success() {
             return Err(anyhow!("Authentication failed"));
         }
 
@@ -186,22 +201,30 @@ impl SshConnection {
         log::info!("Connecting to {}", addr);
 
         let handler = SshClientHandler::new(&config.host);
-        let mut handle = client::connect(Arc::new(ssh_config), &addr, handler).await?;
+        let mut handle = tokio::time::timeout(
+            std::time::Duration::from_secs(config.timeout as u64),
+            client::connect(Arc::new(ssh_config), &addr, handler),
+        )
+        .await
+        .map_err(|_| anyhow!("Connection to {} timed out after {}s", addr, config.timeout))??;
 
         log::info!("Connected, authenticating with key as {}", config.username);
 
         let key_data = tokio::fs::read_to_string(key_path).await?;
         let key_pair = if let Some(pass) = passphrase {
-            russh_keys::decode_secret_key(&key_data, Some(pass))?
+            russh::keys::decode_secret_key(&key_data, Some(pass))?
         } else {
-            russh_keys::decode_secret_key(&key_data, None)?
+            russh::keys::decode_secret_key(&key_data, None)?
         };
 
-        let authenticated = handle
-            .authenticate_publickey(&config.username, Arc::new(key_pair))
+        let auth_result = handle
+            .authenticate_publickey(
+                &config.username,
+                russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key_pair), None),
+            )
             .await?;
 
-        if !authenticated {
+        if !auth_result.success() {
             return Err(anyhow!("Public key authentication failed"));
         }
 
@@ -232,15 +255,7 @@ impl SshConnection {
         rows: u32,
     ) -> Result<()> {
         channel
-            .request_pty(
-                false,
-                term,
-                cols,
-                rows,
-                0,
-                0,
-                &[],
-            )
+            .request_pty(false, term, cols, rows, 0, 0, &[])
             .await?;
         Ok(())
     }
@@ -252,20 +267,13 @@ impl SshConnection {
     }
 
     /// Resize the PTY
-    pub async fn resize_pty(
-        channel: &Channel<client::Msg>,
-        cols: u32,
-        rows: u32,
-    ) -> Result<()> {
+    pub async fn resize_pty(channel: &Channel<client::Msg>, cols: u32, rows: u32) -> Result<()> {
         channel.window_change(cols, rows, 0, 0).await?;
         Ok(())
     }
 
     /// Send data to the channel
-    pub async fn send_data(
-        channel: &Channel<client::Msg>,
-        data: &[u8],
-    ) -> Result<()> {
+    pub async fn send_data(channel: &Channel<client::Msg>, data: &[u8]) -> Result<()> {
         channel.data(data).await?;
         Ok(())
     }
@@ -285,6 +293,13 @@ impl SshConnection {
 }
 
 /// Jump host support for ProxyJump
+///
+/// Implemented per IDEA.md's jump-host requirement but not yet wired into
+/// the connect flow — see TODO.AI.md Phase 1.4. The argument count mirrors
+/// distinct jump-host vs. target-host connection parameters (host/port/user/
+/// creds for each side) and is left unrefactored until the call site lands.
+#[allow(dead_code)]
+#[allow(clippy::too_many_arguments)]
 pub async fn connect_through_jump_host(
     jump_host: &str,
     jump_port: u16,
@@ -300,31 +315,41 @@ pub async fn connect_through_jump_host(
         host: jump_host.to_string(),
         port: jump_port,
         username: jump_user.to_string(),
-        auth_type: super::AuthType::Password,  // Will be set based on credentials
+        auth_type: super::AuthType::Password, // Will be set based on credentials
         timeout: 30,
         keepalive: 60,
         compression: false,
     };
-    
+
     let jump_conn = match jump_creds {
         Credentials::Password { password } => {
             SshConnection::connect_password(jump_config, password).await?
         }
-        Credentials::PublicKey { key_path, passphrase } => {
-            SshConnection::connect_key(jump_config, &key_path.to_string_lossy(), passphrase.as_deref()).await?
+        Credentials::PublicKey {
+            key_path,
+            passphrase,
+        } => {
+            SshConnection::connect_key(
+                jump_config,
+                &key_path.to_string_lossy(),
+                passphrase.as_deref(),
+            )
+            .await?
         }
         _ => return Err(anyhow!("Unsupported credential type for jump host")),
     };
-    
-    // Open direct-tcpip channel through jump host to target
-    let _channel = jump_conn.handle.channel_open_direct_tcpip(
-        target_host,
-        target_port as u32,
-        "127.0.0.1",
-        0,
-    ).await?;
 
-    log::info!("Established tunnel through jump host to {}:{}", target_host, target_port);
+    // Open direct-tcpip channel through jump host to target
+    let _channel = jump_conn
+        .handle
+        .channel_open_direct_tcpip(target_host, target_port as u32, "127.0.0.1", 0)
+        .await?;
+
+    log::info!(
+        "Established tunnel through jump host to {}:{}",
+        target_host,
+        target_port
+    );
 
     // Now connect to target through the tunnel
     // This would require wrapping the channel as a transport

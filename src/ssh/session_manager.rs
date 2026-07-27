@@ -1,11 +1,11 @@
 //! SSH session manager - handles multiple SSH connections
 
+use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex;
 use uuid::Uuid;
-use anyhow::Result;
 
 use super::connection::SshConnection;
 use super::ConnectionConfig;
@@ -22,6 +22,11 @@ pub enum SessionState {
 /// Active SSH session
 pub struct Session {
     pub id: Uuid,
+    /// Connection parameters used to establish this session.
+    ///
+    /// Not yet read anywhere — reserved for a future "connection details"
+    /// UI panel; see TODO.AI.md Phase 1.1.
+    #[allow(dead_code)]
     pub config: ConnectionConfig,
     pub state: SessionState,
     connection: Option<SshConnection>,
@@ -59,11 +64,7 @@ impl SessionManager {
     }
 
     /// Connect with password authentication
-    pub async fn connect_password(
-        &self,
-        config: ConnectionConfig,
-        password: &str,
-    ) -> Result<Uuid> {
+    pub async fn connect_password(&self, config: ConnectionConfig, password: &str) -> Result<Uuid> {
         let mut session = Session::new(config.clone());
         session.state = SessionState::Connecting;
 

@@ -1,4 +1,9 @@
 //! SFTP client implementation using russh-sftp 2.1.x
+//!
+//! Implemented per IDEA.md's SFTP-browser requirement but not yet wired
+//! into the active session/UI flow (`SftpBrowser` in `browser.rs` is
+//! UI-state-only with no network I/O) — see TODO.AI.md Phase 1.3.
+#![allow(dead_code)]
 
 use anyhow::{anyhow, Context, Result};
 use russh::Channel;
@@ -48,7 +53,9 @@ impl SftpClient {
     }
 
     fn sftp(&self) -> Result<&SftpSession> {
-        self.sftp.as_ref().ok_or_else(|| anyhow!("SFTP not connected"))
+        self.sftp
+            .as_ref()
+            .ok_or_else(|| anyhow!("SFTP not connected"))
     }
 
     pub async fn list_directory(&self, path: &Path) -> Result<Vec<FileEntry>> {
@@ -189,8 +196,10 @@ impl SftpClient {
         log::info!("SFTP: Changing permissions of {:?} to {:o}", path, mode);
         let sftp = self.sftp()?;
         let path_str = path.to_string_lossy().into_owned();
-        let mut attrs = FileAttributes::default();
-        attrs.permissions = Some(mode);
+        let attrs = FileAttributes {
+            permissions: Some(mode),
+            ..Default::default()
+        };
         sftp.set_metadata(path_str, attrs).await?;
         Ok(())
     }
