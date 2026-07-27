@@ -266,6 +266,8 @@ The single binary contains **everything the app needs to function**. The user is
 | Before task completion | Full compliance check | Ensure correctness |
 | When uncertain about a spec requirement | Read that specific section — never guess, never rely on prior-session memory | Accuracy without waste |
 
+**Hook-enforced:** `spec-guard.sh` blocks Edit/Write on project files until AI.md/SPEC.md has been Read this session; the gate re-arms after every compaction.
+
 ## Self-Validation Loop
 
 **AI MUST verify its own work with real tools before reporting a task as done. Do not rely on "the code looks right."**
@@ -367,33 +369,33 @@ Distribution artifact names follow the schema:
 
 | Token | Allowed values |
 |-------|----------------|
-| `{platform}` | `linux`, `windows`, `macos`, `freebsd`, `netbsd`, `openbsd` (lowercase, normalized OS name — never the full Rust target triple) |
-| `{arch}` | `x86_64`, `aarch64`, `armv7`, `i686`, `riscv64`, … (the architecture portion of the Rust target triple) |
+| `{platform}` | `linux`, `windows`, `darwin`, `freebsd`, `netbsd`, `openbsd` (lowercase, normalized OS name — never the full Rust target triple; macOS is always `darwin`, never `macos`) |
+| `{arch}` | `amd64`, `arm64`, `armv7`, `i686`, `riscv64`, … (normalized architecture name — `x86_64` maps to `amd64`, `aarch64` maps to `arm64`; other arches keep the triple's arch token) |
 | `{.ext}` | `.exe` on Windows; empty everywhere else |
 
 **Normalization rules:**
-- Strip the `-musl` libc suffix from the artifact name. `x86_64-unknown-linux-musl` → `linux-x86_64`, NOT `linux-x86_64-musl`. Static linkage is the project default (PART 0 → "Single Static Binary"), so calling it out in the filename is redundant.
+- Strip the `-musl` libc suffix from the artifact name. `x86_64-unknown-linux-musl` → `linux-amd64`, NOT `linux-amd64-musl`. Static linkage is the project default (PART 0 → "Single Static Binary"), so calling it out in the filename is redundant.
 - Strip the vendor token (`unknown`, `pc`, `apple`) from the artifact name.
 - Strip the ABI token (`gnu`, `msvc`, `eabihf`, …) from the artifact name unless multiple ABIs of the same `{platform}-{arch}` ship in the same release; in that rare case append `-{abi}` after `{arch}`.
-- `apple-darwin` maps to `macos`. `pc-windows-msvc` maps to `windows`. `unknown-linux-musl` maps to `linux`.
+- `apple-darwin` maps to `darwin`. `pc-windows-msvc` maps to `windows`. `unknown-linux-musl` maps to `linux`. `x86_64` maps to `amd64`; `aarch64` maps to `arm64` — artifact names use Go-style OS/arch terms so Go and Rust releases are named identically.
 
 **Worked examples:**
 
 | Rust target triple | Artifact name |
 |--------------------|---------------|
-| `x86_64-unknown-linux-musl` | `{project_name}-linux-x86_64` |
-| `aarch64-unknown-linux-musl` | `{project_name}-linux-aarch64` |
+| `x86_64-unknown-linux-musl` | `{project_name}-linux-amd64` |
+| `aarch64-unknown-linux-musl` | `{project_name}-linux-arm64` |
 | `armv7-unknown-linux-musleabihf` | `{project_name}-linux-armv7` |
-| `x86_64-pc-windows-msvc` | `{project_name}-windows-x86_64.exe` |
-| `aarch64-pc-windows-msvc` | `{project_name}-windows-aarch64.exe` |
-| `x86_64-apple-darwin` | `{project_name}-macos-x86_64` |
-| `aarch64-apple-darwin` | `{project_name}-macos-aarch64` |
-| `x86_64-unknown-freebsd` | `{project_name}-freebsd-x86_64` |
+| `x86_64-pc-windows-msvc` | `{project_name}-windows-amd64.exe` |
+| `aarch64-pc-windows-msvc` | `{project_name}-windows-arm64.exe` |
+| `x86_64-apple-darwin` | `{project_name}-darwin-amd64` |
+| `aarch64-apple-darwin` | `{project_name}-darwin-arm64` |
+| `x86_64-unknown-freebsd` | `{project_name}-freebsd-amd64` |
 
 **Other rules:**
 - Local (in-tree) primary binary name: `{project_name}` (no platform/arch suffix during local development inside the Docker image)
 - If optional helper binaries exist, use `{project_name}-{tool}` for the in-tree name and `{project_name}-{tool}-{platform}-{arch}{.ext}` for distribution
-- Checksum files mirror the artifact name plus `.sha256` (e.g., `{project_name}-linux-x86_64.sha256`)
+- Checksum files mirror the artifact name plus `.sha256` (e.g., `{project_name}-linux-amd64.sha256`)
 
 **Single-binary rule:** the default user experience is "download one file, run it." The primary binary MUST be self-sufficient (PART 0 → "Self-Contained Assets"). Helper binaries are not a substitute for putting features into the primary binary; if a feature can live behind a CLI subcommand of the primary binary, it MUST.
 
@@ -644,8 +646,8 @@ This list is not exhaustive; treat it as the starting point. When introducing a 
 |-----------------|---------|
 | `cargo fmt --all` | Format code |
 | `cargo fmt --all --check` | Formatting verification |
-| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | Lint enforcement |
-| `cargo test --workspace --all-features` | Test suite |
+| `cargo clippy -- -D warnings` | Lint enforcement |
+| `cargo test --lib --no-fail-fast` | Test suite |
 | `cargo build` | Debug build |
 | `cargo build --release` | Release build |
 | `cargo doc --workspace --no-deps` | Documentation build |
@@ -688,10 +690,10 @@ Bare `cargo …` invocations on the host are forbidden by PART 0 → "No Host To
 
 ```toml
 [profile.release]
-opt-level     = 3
-lto           = "fat"
+opt-level     = "z"
+lto           = true
 codegen-units = 1
-strip         = "symbols"
+strip         = true
 panic         = "abort"
 ```
 
@@ -760,7 +762,7 @@ The `assets/` directory in the repo holds source files (fonts, icons, default th
 ## Release Artifacts
 
 - Primary binary follows the naming schema `{project_name}-{platform}-{arch}{.ext}` defined in PART 2 → "Binary Model" — single statically linked file, `-musl`/vendor/ABI tokens stripped
-- Each release MUST publish artifacts for at minimum: `{project_name}-linux-x86_64`, `{project_name}-linux-aarch64`, `{project_name}-windows-x86_64.exe`, `{project_name}-windows-aarch64.exe`, `{project_name}-macos-x86_64`, `{project_name}-macos-aarch64` (subset acceptable only when IDEA.md narrows platform scope)
+- Each release MUST publish artifacts for at minimum: `{project_name}-linux-amd64`, `{project_name}-linux-arm64`, `{project_name}-windows-amd64.exe`, `{project_name}-windows-arm64.exe`, `{project_name}-darwin-amd64`, `{project_name}-darwin-arm64` (subset acceptable only when IDEA.md narrows platform scope)
 - A static-linkage verification step is part of release: `ldd` / `otool -L` / `dumpbin /dependents` output is captured and checked against an allowlist (kernel vDSO, Apple system frameworks, Windows kernel32/user32 etc.) — anything outside the allowlist fails the release
 - No companion files (no `.so`, `.dylib`, `.dll`, no asset bundles, no font directories) ship next to the binary
 - Include SHA-256 checksums for every published artifact, named `{artifact}.sha256`
@@ -784,11 +786,11 @@ docker/
 │   └── usr/local/bin/entrypoint.sh         # sets non-root UID/GID, prepares cache/target dirs; called by tini → entrypoint.sh → app
 ├── docker-compose.yml                      # production/human runtime — image: ghcr.io/{org}/{name}:latest
 ├── docker-compose.dev.yml                  # human development — image: ghcr.io/{org}/{name}:devel
-├── docker-compose.test.yml                 # automated testing (AI-usable) — builds from Dockerfile, ephemeral tmpfs, named bridge net
+├── docker-compose.test.yml                 # automated testing — builds from Dockerfile, valkey cache w/ ephemeral tmpfs, named bridge net; AI prefers tests/ scripts over running this directly
 └── README.md                               # how to build the image, run tests, run GUI with display forwarding
 ```
 
-All three compose files live under `docker/` (per `dockerfile_conventions.md` → "Docker Compose / File locations"). A top-level `docker-compose.yml` symlink or shim is allowed for ergonomics, but the source of truth lives under `docker/`. AI MUST only run `docker-compose.test.yml`; `docker-compose.yml` and `docker-compose.dev.yml` are human-only.
+All three compose files live under `docker/` (per `dockerfile_conventions.md` → "Docker Compose / File locations"). A top-level `docker-compose.yml` symlink or shim is allowed for ergonomics, but the source of truth lives under `docker/`. `docker-compose.yml` and `docker-compose.dev.yml` are human-only; AI's preferred interface for `docker-compose.test.yml` is the project's `tests/` scripts rather than a direct invocation.
 
 ### Toolchain Image
 
@@ -1032,6 +1034,73 @@ All machine-dependent settings MUST be detected at runtime on the target machine
 - Support config file + environment variable + CLI override layering
 - CLI override wins over env; env wins over config; config wins over defaults
 - Secrets must not be stored in world-readable files
+
+## Logging & Log Rotation
+
+Applications write `app.log` and `error.log` to the platform log directory. Rotation is built in — no external logrotate needed. Same `rotate`/`keep` schema as the SERVER template.
+
+### Rotation Options
+
+| Option | Description |
+|--------|-------------|
+| `never` | Never rotate |
+| `daily` | Rotate daily |
+| `weekly` | Rotate weekly |
+| `monthly` | Rotate monthly |
+| `yearly` | Rotate yearly |
+| `NMB` | Rotate at N megabytes (e.g., `50MB`) |
+| `NGB` | Rotate at N gigabytes (e.g., `1GB`) |
+| Combined | Time + size, whichever first (e.g., `weekly,50MB`) |
+
+### Retention Options
+
+| Option | Description |
+|--------|-------------|
+| `none` | Do not keep old logs (delete after rotation) |
+| `N` | Keep N old log files |
+| `Nd` | Keep logs for N days |
+| `Nw` | Keep logs for N weeks |
+| `Nm` | Keep logs for N months |
+| `forever` | Keep forever (no automatic deletion) |
+
+### Configuration
+
+```yaml
+logging:
+  # Global log level: debug, info, warn, error
+  level: warn
+
+  # All log types share these options:
+  #   filename: name of log file
+  #   format: output format (text, json)
+  #   rotate: rotation policy
+  #   keep: retention policy
+  #   compress: compress rotated logs (only useful if keep > 0)
+
+  app:
+    filename: app.log
+    format: text
+    rotate: weekly,50MB
+    keep: none
+    compress: false
+
+  error:
+    filename: error.log
+    format: text
+    rotate: weekly,50MB
+    keep: none
+    compress: false
+```
+
+### Defaults
+
+| Log Type | Rotation | Keep |
+|----------|----------|------|
+| app.log | weekly,50MB | none |
+| error.log | weekly,50MB | none |
+
+- `weekly,50MB` = rotate on weekly OR 50MB, whichever comes first
+- `keep: none` = do not retain old logs (default) — deleted immediately after rotation
 
 ## Standard CLI Flags
 
@@ -1410,6 +1479,18 @@ jobs:
 - Jenkins: `Security` stage uses `parallel {}`; truffleHog and Trivy each run via `docker.image(...).inside { ... }`.
 - All providers: same gates, same severities, same exit conditions — no weaker subset on any provider.
 
+## Post-Push CI Verification
+
+`act --list` and a local `cargo test` pass only prove the workflow's syntax/job graph is valid and the code works in the local environment — they are not the real CI build. Every push (normal feature-branch push or an emergency direct push to the default branch) triggers a real CI run on the provider's infrastructure with real secrets, real matrix jobs, and the real `casjaysdev/rust:latest` toolchain image; any of those can fail even when every local check passed. Treating "local checks passed" as equivalent to "the build is green" is itself a bug.
+
+After every push, check the triggered run's status:
+- **GitHub**: `gh run list --branch {branch} --commit {sha} --limit 1` then `gh run watch {run-id}` (or `gh run view {run-id} --json status,conclusion`)
+- **GitLab**: `curl -qsSf -H "PRIVATE-TOKEN: $GITLAB_TOKEN" ".../repository/commits/{sha}/statuses"`
+- **Gitea / Forgejo**: `curl -qsSf -H "Authorization: token $TOKEN" ".../commits/{sha}/status"`
+- **Jenkins**: poll the job's `lastBuild/api/json` for `result`
+
+Build failed → this is a bug, not a note for later; diagnose the root cause and fix it with a follow-up commit — never leave the default branch red. Build pending/running → the task is not done yet; wait and re-check. No CI config in the project → this step is a no-op.
+
 ## Suggested CI Steps
 
 All Rust CI jobs run inside `casjaysdev/rust:latest`. Never `cargo install` or `rustup` in a workflow `run:` step — every tool is already in the image. No `ensure-build-image` pre-flight, no `build-toolchain.yml`.
@@ -1424,7 +1505,7 @@ jobs:
       image: casjaysdev/rust:latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-      - run: make build
+      - run: cargo build --release
 ```
 
 ### Required Concurrency and Retention Headers
@@ -1445,18 +1526,18 @@ Every `actions/upload-artifact` step MUST set a finite `retention-days`:
 - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
   with:
     name: {project_name}-${{ matrix.target }}
-    path: dist/
+    path: binaries/
     # release-job artifacts may use up to 30; build-job CI artifacts use 7
     retention-days: 7
 ```
 
 ```bash
 # Prepare output directory for release artifacts (binaries, checksums, SBOM)
-mkdir -p dist
+mkdir -p binaries
 
 # Run gates inside the image (casjaysdev/rust:latest — all tools pre-installed)
-docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo fmt --all --check
-docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo clippy --workspace --all-targets --all-features -- -D warnings
+docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo fmt --check
+docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo clippy -- -D warnings
 docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo test --workspace --all-features
 docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo doc --workspace --no-deps
 
@@ -1482,14 +1563,14 @@ for TARGET in x86_64-unknown-linux-musl aarch64-unknown-linux-musl; do
     -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
     cargo build --release --target "$TARGET"
 
-  # Map triple → artifact name: x86_64-unknown-linux-musl → linux-x86_64
+  # Map triple → artifact name: x86_64-unknown-linux-musl → linux-amd64
   case "$TARGET" in
-    x86_64-unknown-linux-musl)   ARTIFACT="{project_name}-linux-x86_64" ;;
-    aarch64-unknown-linux-musl)  ARTIFACT="{project_name}-linux-aarch64" ;;
+    x86_64-unknown-linux-musl)   ARTIFACT="{project_name}-linux-amd64" ;;
+    aarch64-unknown-linux-musl)  ARTIFACT="{project_name}-linux-arm64" ;;
   esac
 
-  cp "target/$TARGET/release/{project_name}" "dist/$ARTIFACT"
-  sha256sum "dist/$ARTIFACT" > "dist/$ARTIFACT.sha256"
+  cp "target/$TARGET/release/{project_name}" "binaries/$ARTIFACT"
+  sha256sum "binaries/$ARTIFACT" > "binaries/$ARTIFACT.sha256"
 
   # Verify static linkage for this target — fails the build if unexpected
   # dynamic deps appear. Use the appropriate inspector per target family:
@@ -1502,10 +1583,10 @@ done
 
 # Generate the SBOM (CycloneDX) — published alongside the release artifacts.
 # `cargo cyclonedx --format json` writes `bom.json` next to Cargo.toml; rename
-# into dist/ for inclusion in the release.
+# into binaries/ for inclusion in the release.
 docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
   cargo cyclonedx --format json
-cp bom.json "dist/{project_name}-bom.json"
+cp bom.json "binaries/{project_name}-bom.json"
 ```
 
 For GUI smoke tests in CI, use a virtual X server (e.g., `Xvfb`) and a headless Wayland compositor (e.g., `cage`, `weston --backend=headless`) **inside** the container or as a sidecar service — both backends MUST be exercised, not just one.
@@ -1810,7 +1891,7 @@ Drift between `Cargo.lock` and the generated section of `LICENSE.md` is a CI fai
 - [ ] X11 forwarding sample command is documented and works against a real Xorg/XWayland session
 - [ ] Wayland forwarding sample command is documented and works against a real Wayland compositor
 - [ ] `rust-toolchain.toml` pins the toolchain; `.cargo/config.toml` pins static-link rustflags
-- [ ] `Cargo.toml` release profile uses `lto = "fat"`, `codegen-units = 1`, `strip = "symbols"`, `panic = "abort"`
+- [ ] `Cargo.toml` release profile uses `opt-level = "z"`, `lto = true`, `codegen-units = 1`, `strip = true`, `panic = "abort"`
 - [ ] Repo has `assets/` (build-time source) and a Rust embedding module (`include_bytes!` / `rust-embed`) wiring it into the binary
 - [ ] No source files in any language other than Rust contribute to the binary (small Docker shell helpers excepted)
 - [ ] `deny.toml` exists at project root with the spec's default allowlist / denylist (PART 11 → "License Compliance")
@@ -1873,7 +1954,7 @@ All gates run inside the project Docker image — never on the host.
 - [ ] `LICENSE.md` regenerated and committed if `Cargo.lock` changed; CI license-drift check is green
 - [ ] Distributed binary's actual license matches what README and "About" claim (no silent GPL/LGPL relicensing via a transitive crate)
 - [ ] Artifact filenames follow `{project_name}-{platform}-{arch}{.ext}` with `-musl`/vendor/ABI tokens stripped
-- [ ] Artifacts cover the supported target matrix declared in IDEA.md (defaults: `{project_name}-linux-{x86_64,aarch64}`, `{project_name}-windows-{x86_64,aarch64}.exe`, `{project_name}-macos-{x86_64,aarch64}`)
+- [ ] Artifacts cover the supported target matrix declared in IDEA.md (defaults: `{project_name}-linux-{amd64,arm64}`, `{project_name}-windows-{amd64,arm64}.exe`, `{project_name}-darwin-{amd64,arm64}`)
 - [ ] SBOM generated via `cargo-cyclonedx` and published with the release; provenance/attestation included when the platform supports it
 - [ ] Packaging metadata matches supported GUI/TUI/CLI surfaces
 
@@ -1945,8 +2026,8 @@ internal_org:     {project_org}
 app_name:         {App Display Name}
 crate_name:       {project_name}
 official_site:    {full URL with scheme, e.g., https://example.com — or empty}
-maintainer_name:  {Maintainer Name}
-maintainer_email: {maintainer@example.com}
+maintainer_name:  {Maintainer Name — defaults to {project_org} if unset}
+maintainer_email: {maintainer@example.com — or empty; used only if set}
 
 ## Business logic
 

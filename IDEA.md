@@ -326,11 +326,11 @@ repo:             https://github.com/tabssh/desktop
 
 | OS | Architectures | Binary names |
 |----|--------------|--------------|
-| Linux (musl static) | x86_64, aarch64 | `tabssh-linux-x86_64`, `tabssh-linux-aarch64` |
-| macOS | x86_64, aarch64 | `tabssh-macos-x86_64`, `tabssh-macos-aarch64` |
-| Windows | x86_64, aarch64 | `tabssh-windows-x86_64.exe`, `tabssh-windows-aarch64.exe` |
-| FreeBSD | x86_64, aarch64 | `tabssh-freebsd-x86_64`, `tabssh-freebsd-aarch64` |
-| OpenBSD | x86_64, aarch64 | `tabssh-openbsd-x86_64`, `tabssh-openbsd-aarch64` |
-| NetBSD | x86_64 | `tabssh-netbsd-x86_64` |
+| Linux (musl static) | amd64, arm64 | `tabssh-linux-amd64`, `tabssh-linux-arm64` |
+| macOS | amd64, arm64 | `tabssh-darwin-amd64`, `tabssh-darwin-arm64` |
+| Windows | amd64, arm64 | `tabssh-windows-amd64.exe`, `tabssh-windows-arm64.exe` |
+| FreeBSD | amd64, arm64 | `tabssh-freebsd-amd64`, `tabssh-freebsd-arm64` |
+| OpenBSD | amd64, arm64 | `tabssh-openbsd-amd64`, `tabssh-openbsd-arm64` |
+| NetBSD | amd64 | `tabssh-netbsd-amd64` |
 
-Total: 11 binary variants. Binary naming uses OS names `linux/macos/windows/freebsd/openbsd/netbsd` and arch names `x86_64`/`aarch64` (not `darwin`, not `amd64`/`arm64`).
+Total: 11 binary variants. Binary naming uses OS names `linux/darwin/windows/freebsd/openbsd/netbsd` and arch names `amd64`/`arm64` (Go-style, per AI.md → PART 2 "Binary Model" — not `macos`, not `x86_64`/`aarch64`).
