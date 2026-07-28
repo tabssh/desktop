@@ -57,8 +57,16 @@ jobs:
       - name: Verify static linkage
         run: |
           CRATE_NAME=$(grep '^name' Cargo.toml | head -1 | sed 's/name = "\(.*\)"/\1/')
-          ldd "target/x86_64-unknown-linux-musl/release/${CRATE_NAME}" 2>&1 \
-            | grep -qE 'not a dynamic executable|statically linked'
+          BIN="target/x86_64-unknown-linux-musl/release/${CRATE_NAME}"
+          file "${BIN}" | grep -qE 'statically linked|static-pie linked' || {
+            echo "::error::binary is not statically linked"
+            file "${BIN}"
+            exit 1
+          }
+          # musl's ldd on a genuinely static binary reports "Not a valid
+          # dynamic program" (not glibc's "not a dynamic executable"
+          # wording), so match both phrasings case-insensitively.
+          ldd "${BIN}" 2>&1 | grep -qiE 'not a dynamic executable|not a valid dynamic program|statically linked'
 
       - name: Get crate name
         id: crate
