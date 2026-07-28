@@ -11,7 +11,16 @@ targets = [
 # RUSTSEC-2023-0071: rsa crate Marvin Attack timing side-channel.
 # Transitive via russh -> rsa; upstream advisory states no safe
 # upgrade is currently available. Revisit when russh or rsa ships a fix.
-ignore = ["RUSTSEC-2023-0071"]
+#
+# RUSTSEC-2024-0388: derivative crate is unmaintained, no patched
+# version exists. Transitive via zbus -> derivative. Revisit if
+# zbus migrates to a maintained derive-macro alternative.
+#
+# RUSTSEC-2026-0173: proc-macro-error2 crate is unmaintained, no
+# patched version exists. Transitive via rust-embed ->
+# include-flate-codegen -> proc-macro-error2. Revisit if
+# rust-embed's dependency chain migrates away from it.
+ignore = ["RUSTSEC-2023-0071", "RUSTSEC-2024-0388", "RUSTSEC-2026-0173"]
 
 [licenses]
 allow = [
