@@ -22,13 +22,11 @@ allow = [
     "Zlib",
     "CC0-1.0",
     "OpenSSL",
-]
-deny = [
-    "GPL-2.0",
-    "GPL-3.0",
-    "AGPL-3.0",
-    "LGPL-2.0",
-    "LGPL-3.0",
+    "BSL-1.0",
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+    "Unicode-3.0",
+    "MPL-2.0",
 ]
 confidence-threshold = 0.8
 

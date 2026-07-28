@@ -21,12 +21,12 @@ lint:
   stage: lint
   script:
     - cargo fmt --all --check
-    - cargo clippy --workspace --all-targets --all-features -- -D warnings
+    - cargo clippy --workspace --all-targets --all-features --target x86_64-unknown-linux-musl -- -D warnings
 
 test:
   stage: test
   script:
-    - cargo test --workspace --all-features
+    - cargo test --workspace --all-features --target x86_64-unknown-linux-musl
     - cargo tarpaulin --workspace --all-features --fail-under 60 --timeout 120
 
 build:

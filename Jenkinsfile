@@ -20,7 +20,7 @@ pipeline {
             }
             steps {
                 sh 'cargo fmt --all --check'
-                sh 'cargo clippy --workspace --all-targets --all-features -- -D warnings'
+                sh 'cargo clippy --workspace --all-targets --all-features --target x86_64-unknown-linux-musl -- -D warnings'
             }
         }
 
@@ -32,7 +32,7 @@ pipeline {
                 }
             }
             steps {
-                sh 'cargo test --workspace --all-features'
+                sh 'cargo test --workspace --all-features --target x86_64-unknown-linux-musl'
                 sh 'cargo tarpaulin --workspace --all-features --fail-under 60 --timeout 120'
             }
         }

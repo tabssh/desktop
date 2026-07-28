@@ -12,6 +12,7 @@ WORKDIR /build
 
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+COPY benches ./benches
 COPY assets ./assets
 COPY build.rs ./
 
