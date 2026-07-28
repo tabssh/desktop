@@ -8,7 +8,10 @@ targets = [
 ]
 
 [advisories]
-ignore = []
+# RUSTSEC-2023-0071: rsa crate Marvin Attack timing side-channel.
+# Transitive via russh -> rsa; upstream advisory states no safe
+# upgrade is currently available. Revisit when russh or rsa ships a fix.
+ignore = ["RUSTSEC-2023-0071"]
 
 [licenses]
 allow = [
