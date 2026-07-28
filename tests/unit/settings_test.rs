@@ -25,7 +25,7 @@ fn test_settings_serialization() {
 
 #[test]
 fn test_settings_persistence() {
-    let db = Database::open().unwrap();
+    let db = Database::open_in_memory().unwrap();
     let settings = Settings::default();
 
     settings.save(&db).unwrap();

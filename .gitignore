@@ -114,3 +114,7 @@ $RECYCLE.BIN/
 **/*.rewrite.sh
 **/*.refactor.sh
 
+# ignore scratch verification/CI-watch logs
+.verify.log
+.ciwatch.log
+

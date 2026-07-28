@@ -19,6 +19,16 @@ The phases below are dependency-ordered: `Phase 0 → Phase 1` is hard (you cann
 
 ---
 
+## Known issues (non-blocking)
+
+- `cargo deny check bans` reports a `multiple-versions` warning for `winnow`
+  (0.5.40 vs 0.7.15 pulled in via different dependency chains). Not a hard
+  CI failure (`bans.multiple-versions = "warn"` in `deny.toml`), but should
+  be resolved by bumping whichever direct dependency pins the older
+  `winnow` range once one is available.
+
+---
+
 ## Phase 0 — get the build green (blocker)
 
 50 compile errors as of 2026-05-01. Distribution and remediation:

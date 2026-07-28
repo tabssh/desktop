@@ -15,7 +15,7 @@ fn test_full_application_workflow() {
     // context panics ("Cannot drop a runtime in a context where
     // blocking is not allowed").
     // Initialize database
-    let db = Database::open().unwrap();
+    let db = Database::open_in_memory().unwrap();
 
     // Load settings
     let settings = Settings::load(&db).unwrap();

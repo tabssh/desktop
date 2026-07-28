@@ -110,6 +110,18 @@ impl Database {
         &self.conn
     }
 
+    /// Open an isolated in-memory database (intended for tests)
+    ///
+    /// Each call creates a fresh, independent database with no shared
+    /// state, avoiding cross-test pollution when tests run against the
+    /// same real database file on disk.
+    pub fn open_in_memory() -> Result<Self> {
+        let conn = Connection::open_in_memory()?;
+        let db = Self { conn };
+        db.initialize()?;
+        Ok(db)
+    }
+
     // ========== Known Hosts Methods ==========
 }
 

@@ -4,13 +4,13 @@ use tabssh::storage::database::Database;
 
 #[test]
 fn test_database_creation() {
-    let db = Database::open().unwrap();
+    let db = Database::open_in_memory().unwrap();
     let _ = db.connection();
 }
 
 #[test]
 fn test_known_hosts() {
-    let db = Database::open().unwrap();
+    let db = Database::open_in_memory().unwrap();
 
     // Add known host
     db.add_known_host(
@@ -41,7 +41,7 @@ fn test_known_hosts() {
 
 #[test]
 fn test_list_known_hosts() {
-    let db = Database::open().unwrap();
+    let db = Database::open_in_memory().unwrap();
 
     db.add_known_host("host1.com", 22, "ssh-rsa", "fp1", b"key1")
         .unwrap();
