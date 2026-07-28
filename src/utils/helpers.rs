@@ -93,4 +93,55 @@ mod tests {
         assert_eq!(sanitize_filename("test/file.txt"), "test_file.txt");
         assert_eq!(sanitize_filename("test:file?.txt"), "test_file_.txt");
     }
+
+    #[test]
+    fn test_sanitize_filename_empty() {
+        assert_eq!(sanitize_filename(""), "");
+    }
+
+    #[test]
+    fn test_sanitize_filename_all_forbidden_chars() {
+        assert_eq!(sanitize_filename("/\\:*?\"<>|"), "_________");
+    }
+
+    #[test]
+    fn test_format_file_size_gb_and_tb_boundaries() {
+        assert_eq!(format_file_size(1024 * 1024 * 1024), "1.00GB");
+        assert_eq!(format_file_size(1024_u64.pow(4)), "1.00TB");
+        // Larger than a TB still clamps to the TB unit (last entry in UNITS).
+        assert_eq!(format_file_size(1024_u64.pow(4) * 1024), "1024.00TB");
+    }
+
+    #[test]
+    fn test_format_permissions_boundaries() {
+        assert_eq!(format_permissions(0), "---------");
+        assert_eq!(format_permissions(0o777), "rwxrwxrwx");
+    }
+
+    #[test]
+    fn test_get_file_extension_present() {
+        assert_eq!(get_file_extension("archive.tar.gz"), Some("gz"));
+        assert_eq!(get_file_extension("photo.PNG"), Some("PNG"));
+    }
+
+    #[test]
+    fn test_get_file_extension_absent() {
+        assert_eq!(get_file_extension("README"), None);
+        assert_eq!(get_file_extension(""), None);
+        // A leading-dot-only filename has no extension per Path semantics.
+        assert_eq!(get_file_extension(".bashrc"), None);
+    }
+
+    #[test]
+    fn test_format_transfer_speed() {
+        assert_eq!(format_transfer_speed(0.0), "0B/s");
+        assert_eq!(format_transfer_speed(1024.0), "1.00KB/s");
+        assert_eq!(format_transfer_speed(1048576.0), "1.00MB/s");
+    }
+
+    #[test]
+    fn test_format_transfer_speed_negative_clamps_to_zero() {
+        // Negative float -> u64 cast saturates to 0 in Rust.
+        assert_eq!(format_transfer_speed(-100.0), "0B/s");
+    }
 }

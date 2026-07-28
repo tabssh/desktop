@@ -103,3 +103,100 @@ pub enum ConnectionAction {
     Delete(String),
     ImportConfig,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_has_empty_search_and_no_selection() {
+        let screen = ConnectionListScreen::new();
+        assert_eq!(screen.search_query, "");
+        assert!(screen.selected_connection.is_none());
+    }
+
+    #[test]
+    fn test_default_trait_matches_new() {
+        let screen = ConnectionListScreen::default();
+        assert_eq!(screen.search_query, "");
+        assert!(screen.selected_connection.is_none());
+    }
+
+    #[test]
+    fn test_connection_action_debug_and_clone() {
+        let action = ConnectionAction::Connect("Production Server".to_string());
+        let cloned = action.clone();
+        assert!(!format!("{:?}", action).is_empty());
+        match cloned {
+            ConnectionAction::Connect(name) => assert_eq!(name, "Production Server"),
+            _ => panic!("expected Connect variant"),
+        }
+    }
+
+    /// Render the connection list screen inside a headless egui context and
+    /// make sure it does not panic for a given screen state.
+    fn render_smoke(screen: &mut ConnectionListScreen) -> Option<ConnectionAction> {
+        let ctx = Context::default();
+        let mut result = None;
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            result = screen.render(&ctx, ui);
+        });
+        result
+    }
+
+    #[test]
+    fn test_render_default_state_smoke() {
+        let mut screen = ConnectionListScreen::new();
+        let action = render_smoke(&mut screen);
+        // No widgets are clicked in a headless pass, so no action fires.
+        assert!(action.is_none());
+    }
+
+    #[test]
+    fn test_render_with_search_query_smoke() {
+        let mut screen = ConnectionListScreen::new();
+        screen.search_query = "prod".to_string();
+        render_smoke(&mut screen);
+        assert_eq!(screen.search_query, "prod");
+    }
+
+    #[test]
+    fn test_render_with_selected_connection_smoke() {
+        let mut screen = ConnectionListScreen::new();
+        screen.selected_connection = Some("Production Server".to_string());
+        render_smoke(&mut screen);
+        assert_eq!(
+            screen.selected_connection,
+            Some("Production Server".to_string())
+        );
+    }
+
+    #[test]
+    fn test_render_with_unicode_search_query_smoke() {
+        let mut screen = ConnectionListScreen::new();
+        screen.search_query = "サーバー 🔍".to_string();
+        render_smoke(&mut screen);
+    }
+
+    #[test]
+    fn test_render_connection_list_recent_only_smoke() {
+        let mut screen = ConnectionListScreen::new();
+        let ctx = Context::default();
+        let mut action = None;
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            screen.render_connection_list(ui, &mut action, true);
+        });
+        assert!(action.is_none());
+    }
+
+    #[test]
+    fn test_render_connection_list_all_smoke() {
+        let mut screen = ConnectionListScreen::new();
+        let ctx = Context::default();
+        let mut action = None;
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            screen.render_connection_list(ui, &mut action, false);
+        });
+        assert!(action.is_none());
+    }
+}

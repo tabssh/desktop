@@ -356,3 +356,204 @@ pub async fn connect_through_jump_host(
     // For now, return jump connection as placeholder
     Ok(jump_conn)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use russh::client::Handler;
+
+    // Public (non-secret) OpenSSH-formatted ed25519 key, used only to build
+    // a `PublicKey` value for the pure-logic tests below. No network I/O.
+    const TEST_ED25519_PUBLIC_KEY: &str =
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF2lLaSatTF5r1oq5a0YNdoIVamIzwmYnQqt7GV9mQ92 test";
+
+    fn test_public_key() -> PublicKey {
+        PublicKey::from_openssh(TEST_ED25519_PUBLIC_KEY).unwrap()
+    }
+
+    #[test]
+    fn test_host_key_info_from_public_key() {
+        let key = test_public_key();
+        let info = HostKeyInfo::from_public_key("example.com", 2222, &key);
+        assert_eq!(info.host, "example.com");
+        assert_eq!(info.port, 2222);
+        assert_eq!(info.key_type, "ssh-ed25519");
+        assert!(!info.fingerprint.is_empty());
+        assert!(!info.key_data.is_empty());
+    }
+
+    #[test]
+    fn test_host_key_info_empty_host_and_zero_port() {
+        let key = test_public_key();
+        let info = HostKeyInfo::from_public_key("", 0, &key);
+        assert_eq!(info.host, "");
+        assert_eq!(info.port, 0);
+        // Fingerprint/type derivation must not depend on host/port.
+        assert_eq!(info.key_type, "ssh-ed25519");
+        assert!(!info.fingerprint.is_empty());
+    }
+
+    #[test]
+    fn test_host_key_info_unicode_host() {
+        let key = test_public_key();
+        let info = HostKeyInfo::from_public_key("例え.jp", 22, &key);
+        assert_eq!(info.host, "例え.jp");
+        assert_eq!(info.port, 22);
+    }
+
+    #[test]
+    fn test_host_key_info_max_port() {
+        let key = test_public_key();
+        let info = HostKeyInfo::from_public_key("host.example.com", u16::MAX, &key);
+        assert_eq!(info.port, u16::MAX);
+    }
+
+    #[test]
+    fn test_host_key_info_fingerprint_deterministic_for_same_key() {
+        let key = test_public_key();
+        let info_a = HostKeyInfo::from_public_key("a.example.com", 22, &key);
+        let info_b = HostKeyInfo::from_public_key("b.example.com", 2222, &key);
+        // Same underlying key must yield the same fingerprint/key_data
+        // regardless of host/port, since those aren't part of the key.
+        assert_eq!(info_a.fingerprint, info_b.fingerprint);
+        assert_eq!(info_a.key_data, info_b.key_data);
+    }
+
+    #[tokio::test]
+    async fn test_verify_host_key_no_database_accepts() {
+        let key = test_public_key();
+        let result = verify_host_key("example.com", 22, &key, None).await;
+        assert!(result.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_verify_host_key_no_database_accepts_empty_host_and_zero_port() {
+        let key = test_public_key();
+        let result = verify_host_key("", 0, &key, None).await;
+        assert!(result.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_verify_host_key_new_host_is_auto_added() {
+        let db = crate::storage::Database::open_in_memory().unwrap();
+        let key = test_public_key();
+
+        assert!(db.get_known_host("new.example.com", 22).unwrap().is_none());
+
+        let result = verify_host_key("new.example.com", 22, &key, Some(&db)).await;
+        assert!(result.unwrap());
+
+        let stored = db.get_known_host("new.example.com", 22).unwrap().unwrap();
+        let expected = HostKeyInfo::from_public_key("new.example.com", 22, &key);
+        assert_eq!(stored.fingerprint, expected.fingerprint);
+        assert_eq!(stored.key_type, "ssh-ed25519");
+    }
+
+    #[tokio::test]
+    async fn test_verify_host_key_matching_fingerprint_accepts_and_updates_last_seen() {
+        let db = crate::storage::Database::open_in_memory().unwrap();
+        let key = test_public_key();
+
+        // Seed the database as a previously-trusted host.
+        verify_host_key("known.example.com", 22, &key, Some(&db))
+            .await
+            .unwrap();
+        let before = db.get_known_host("known.example.com", 22).unwrap().unwrap();
+
+        // Re-verifying the same key against the same host must still accept.
+        let result = verify_host_key("known.example.com", 22, &key, Some(&db)).await;
+        assert!(result.unwrap());
+
+        let after = db.get_known_host("known.example.com", 22).unwrap().unwrap();
+        assert_eq!(after.fingerprint, before.fingerprint);
+    }
+
+    #[tokio::test]
+    async fn test_verify_host_key_mismatched_fingerprint_is_rejected() {
+        let db = crate::storage::Database::open_in_memory().unwrap();
+        let trusted_key = test_public_key();
+
+        // Seed the database with the trusted key for this host.
+        verify_host_key("mitm.example.com", 22, &trusted_key, Some(&db))
+            .await
+            .unwrap();
+
+        // A different key presented for the same host must be rejected as a
+        // possible MITM attack rather than silently accepted or re-stored.
+        const OTHER_ED25519_PUBLIC_KEY: &str =
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDKPz3gx6bgwvZ3HEHcrBAAdVj1CbVZUb540ldEUrsw1 test2";
+        let other_key = PublicKey::from_openssh(OTHER_ED25519_PUBLIC_KEY).unwrap();
+
+        let result = verify_host_key("mitm.example.com", 22, &other_key, Some(&db)).await;
+        let err = match result {
+            Err(e) => e,
+            Ok(_) => panic!("expected mismatched host key to be rejected"),
+        };
+        assert!(err.to_string().contains("Host key verification failed"));
+    }
+
+    #[test]
+    fn test_ssh_client_handler_new() {
+        let handler = SshClientHandler::new("example.com");
+        assert_eq!(handler.host, "example.com");
+        assert!(handler.server_public_key.is_none());
+    }
+
+    #[test]
+    fn test_ssh_client_handler_new_empty_host() {
+        let handler = SshClientHandler::new("");
+        assert_eq!(handler.host, "");
+    }
+
+    #[tokio::test]
+    async fn test_check_server_key_stores_key_and_accepts() {
+        let mut handler = SshClientHandler::new("example.com");
+        assert!(handler.server_public_key.is_none());
+
+        let key = test_public_key();
+        let accepted = handler.check_server_key(&key).await.unwrap();
+
+        assert!(accepted);
+        assert!(handler.server_public_key.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_connect_through_jump_host_rejects_unsupported_agent_credentials() {
+        // Credentials::Agent isn't handled by connect_through_jump_host, so
+        // it must be rejected before any network connection is attempted.
+        let result = connect_through_jump_host(
+            "jump.example.com",
+            22,
+            "jumpuser",
+            &Credentials::Agent,
+            "target.example.com",
+            2222,
+            "targetuser",
+            &Credentials::Agent,
+        )
+        .await;
+
+        let err = match result {
+            Err(e) => e,
+            Ok(_) => panic!("expected connect_through_jump_host to return an error"),
+        };
+        assert_eq!(err.to_string(), "Unsupported credential type for jump host");
+    }
+
+    #[tokio::test]
+    async fn test_connect_through_jump_host_rejects_keyboard_interactive_credentials() {
+        let result = connect_through_jump_host(
+            "jump.example.com",
+            22,
+            "jumpuser",
+            &Credentials::KeyboardInteractive,
+            "target.example.com",
+            2222,
+            "targetuser",
+            &Credentials::Agent,
+        )
+        .await;
+
+        assert!(result.is_err());
+    }
+}

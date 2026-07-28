@@ -95,3 +95,106 @@ impl Default for NotificationManager {
         Self::new()
     }
 }
+
+// `render` requires a live `egui::Context` to draw `Window`s and is not
+// exercised here; the queue-management logic (add/info/success/warning/error)
+// is pure and fully covered below.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_manager_has_empty_queue() {
+        let manager = NotificationManager::new();
+        assert!(manager.notifications.is_empty());
+    }
+
+    #[test]
+    fn test_default_matches_new() {
+        let manager = NotificationManager::default();
+        assert!(manager.notifications.is_empty());
+    }
+
+    #[test]
+    fn test_info_adds_notification_with_correct_level() {
+        let mut manager = NotificationManager::new();
+        manager.info("hello");
+
+        assert_eq!(manager.notifications.len(), 1);
+        assert_eq!(manager.notifications[0].message, "hello");
+        assert!(manager.notifications[0].level == NotificationLevel::Info);
+    }
+
+    #[test]
+    fn test_success_adds_notification_with_correct_level() {
+        let mut manager = NotificationManager::new();
+        manager.success("done");
+
+        assert_eq!(manager.notifications.len(), 1);
+        assert!(manager.notifications[0].level == NotificationLevel::Success);
+    }
+
+    #[test]
+    fn test_warning_adds_notification_with_correct_level() {
+        let mut manager = NotificationManager::new();
+        manager.warning("careful");
+
+        assert_eq!(manager.notifications.len(), 1);
+        assert!(manager.notifications[0].level == NotificationLevel::Warning);
+    }
+
+    #[test]
+    fn test_error_adds_notification_with_correct_level() {
+        let mut manager = NotificationManager::new();
+        manager.error("failed");
+
+        assert_eq!(manager.notifications.len(), 1);
+        assert!(manager.notifications[0].level == NotificationLevel::Error);
+    }
+
+    #[test]
+    fn test_multiple_notifications_queue_in_order() {
+        let mut manager = NotificationManager::new();
+        manager.info("first");
+        manager.warning("second");
+        manager.error("third");
+
+        assert_eq!(manager.notifications.len(), 3);
+        assert_eq!(manager.notifications[0].message, "first");
+        assert_eq!(manager.notifications[1].message, "second");
+        assert_eq!(manager.notifications[2].message, "third");
+    }
+
+    #[test]
+    fn test_notifications_get_unique_ids() {
+        let mut manager = NotificationManager::new();
+        manager.info("a");
+        manager.info("b");
+
+        assert_ne!(manager.notifications[0].id, manager.notifications[1].id);
+    }
+
+    #[test]
+    fn test_notification_has_default_three_second_duration() {
+        let mut manager = NotificationManager::new();
+        manager.info("timed");
+
+        assert_eq!(manager.notifications[0].duration, Duration::from_secs(3));
+    }
+
+    #[test]
+    fn test_empty_message_is_still_queued() {
+        let mut manager = NotificationManager::new();
+        manager.info("");
+
+        assert_eq!(manager.notifications.len(), 1);
+        assert_eq!(manager.notifications[0].message, "");
+    }
+
+    #[test]
+    fn test_notification_level_equality() {
+        assert!(NotificationLevel::Info == NotificationLevel::Info);
+        assert!(NotificationLevel::Info != NotificationLevel::Error);
+        assert!(NotificationLevel::Success != NotificationLevel::Warning);
+    }
+}

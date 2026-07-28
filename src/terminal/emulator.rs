@@ -115,3 +115,110 @@ impl TerminalEmulator {
         self.title = title;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_has_requested_size() {
+        let term = TerminalEmulator::new(80, 24);
+        let size = term.size();
+        assert_eq!(size.cols, 80);
+        assert_eq!(size.rows, 24);
+    }
+
+    #[test]
+    fn test_with_config_custom_scrollback() {
+        let term = TerminalEmulator::with_config(40, 10, 500, RendererConfig::default());
+        let size = term.size();
+        assert_eq!(size.cols, 40);
+        assert_eq!(size.rows, 10);
+    }
+
+    #[test]
+    fn test_process_writes_text_into_buffer() {
+        let mut term = TerminalEmulator::new(20, 5);
+        term.process(b"hi");
+        let row = term.buffer().get_row(0).expect("row 0 exists");
+        assert_eq!(row[0].character, 'h');
+        assert_eq!(row[1].character, 'i');
+    }
+
+    #[test]
+    fn test_resize_changes_size() {
+        let mut term = TerminalEmulator::new(80, 24);
+        term.resize(100, 30);
+        let size = term.size();
+        assert_eq!(size.cols, 100);
+        assert_eq!(size.rows, 30);
+    }
+
+    #[test]
+    fn test_title_defaults_empty_and_can_be_set() {
+        let mut term = TerminalEmulator::new(80, 24);
+        assert_eq!(term.title(), "");
+        term.set_title("my session".to_string());
+        assert_eq!(term.title(), "my session");
+    }
+
+    #[test]
+    fn test_clear_resets_visible_screen() {
+        let mut term = TerminalEmulator::new(20, 5);
+        term.process(b"hello");
+        term.clear();
+        let row = term.buffer().get_row(0).expect("row 0 exists");
+        assert!(row.iter().all(|c| c.character == ' '));
+    }
+
+    #[test]
+    fn test_scroll_to_bottom_does_not_panic_on_fresh_terminal() {
+        let mut term = TerminalEmulator::new(20, 5);
+        // Should be a no-op safe call even with no scrollback content yet.
+        term.scroll_to_bottom();
+    }
+
+    #[test]
+    fn test_search_finds_matches_in_scrollback() {
+        let mut term = TerminalEmulator::new(10, 2);
+        // Fill more lines than the visible height so earlier lines roll into scrollback.
+        for i in 0..5 {
+            term.process(format!("line{}\r\n", i).as_bytes());
+        }
+        let matches = term.search("line", true);
+        assert!(!matches.is_empty());
+    }
+
+    #[test]
+    fn test_search_case_insensitive() {
+        let mut term = TerminalEmulator::new(10, 2);
+        for i in 0..5 {
+            term.process(format!("LINE{}\r\n", i).as_bytes());
+        }
+        let matches_sensitive = term.search("line", true);
+        let matches_insensitive = term.search("line", false);
+        assert!(matches_sensitive.is_empty());
+        assert!(!matches_insensitive.is_empty());
+    }
+
+    #[test]
+    fn test_search_no_match_returns_empty() {
+        let mut term = TerminalEmulator::new(10, 2);
+        for i in 0..5 {
+            term.process(format!("line{}\r\n", i).as_bytes());
+        }
+        let matches = term.search("nonexistent", true);
+        assert!(matches.is_empty());
+    }
+
+    #[test]
+    fn test_search_finds_multiple_matches_in_same_row() {
+        let mut term = TerminalEmulator::new(20, 2);
+        for _ in 0..3 {
+            term.process(b"ab ab\r\n");
+        }
+        let matches = term.search("ab", true);
+        // Each scrolled-off row containing "ab ab" should yield two matches.
+        assert!(matches.len() >= 2);
+    }
+}

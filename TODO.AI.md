@@ -1,8 +1,9 @@
 # TabSSH Desktop — Work List
 
-**Last verified:** 2026-05-09
-**Build status:** ❌ Does not compile (~50 errors via `cargo check` in `tabssh-builder` docker image, last verified 2026-05-01). Phase 0 is the blocker; nothing else can ship until it's green.
+**Last verified:** 2026-07-28
+**Build status:** ✅ Compiles and passes `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, and `cargo test --workspace --all-features` (555 tests, 0 failed) inside `casjaysdev/rust:latest` with `-e RUSTFLAGS=""`. `cargo tarpaulin --engine llvm --workspace --all-features --fail-under 60` passes at 70.33% coverage. Phase 0 is cleared.
 **Toolchain infra note (2026-07-24):** a bootstrap pass tried `cargo build --release --target x86_64-unknown-linux-musl` inside `casjaysdev/rust:latest` (the mandated image) and hit an environment-level blocker before code errors could even be re-verified — the image's default entrypoint exits 1 during its SMTP-configuration step, never reaching `cargo`; bypassing the entrypoint (`--entrypoint /bin/sh`) skips whatever setup normally installs the musl toolchain, so `x86_64-linux-musl-gcc` is missing and the build fails at the linker stage instead. This is a defect in the `casjaysdev/rust:latest` image/entrypoint (pulled 2026-06-25 build), not in TabSSH's code — Phase 0's ~50 code errors above are still believed current but could not be freshly confirmed this session.
+**Toolchain infra note (2026-07-27, `cargo test`):** the host triple in `casjaysdev/rust:latest` is `x86_64-unknown-linux-musl`, and `.cargo/config.toml`'s `rustflags = ["-C", "target-feature=+crt-static"]` for that target breaks compiling `async-recursion` (pulled in transitively via `zbus`/`arboard`/`keyring` for clipboard/secret-service support) with "cannot produce proc-macro ... target does not support these crate types". Fix: pass `-e RUSTFLAGS=""` on the `docker run` invocation to override the target-level rustflags for the test run — confirmed working (`cargo fmt --all --check`, `cargo clippy --workspace --all-targets --all-features -- -D warnings`, and `cargo test --workspace --all-features` all exit 0 with this override, 352 tests passing). `make test` can be verified green in this Docker image with this override; do not rely on the default `RUSTFLAGS` from `.cargo/config.toml` for host-native `cargo test`/`cargo clippy` runs.
 **Feature parity vs android:** ~50%. Mobile is at v0.0.9 / DB v29 / ~215 Kotlin files / ~65k LOC, with OCI hypervisor support shipped. Desktop is ~59 Rust files / ~10k LOC.
 
 **Recent mobile changes desktop must absorb** (added to phases below):
@@ -26,6 +27,18 @@ The phases below are dependency-ordered: `Phase 0 → Phase 1` is hard (you cann
   CI failure (`bans.multiple-versions = "warn"` in `deny.toml`), but should
   be resolved by bumping whichever direct dependency pins the older
   `winnow` range once one is available.
+- `src/storage/sessions.rs` (`SavedSession::save`/`load_all`/`delete`) reads
+  and writes a `saved_sessions` SQLite table, but `Database::initialize()`
+  in `src/storage/database.rs` never creates that table (it only creates
+  `connections`, `ssh_keys`, `known_hosts`, `themes`, `settings`). Every
+  `SavedSession` method currently fails with "no such table: saved_sessions"
+  against any database, including a freshly opened one. Found 2026-07-27
+  while adding unit test coverage for `sessions.rs` (tests document the
+  current failing behavior rather than asserting a nonexistent happy path).
+  Fix: add a `CREATE TABLE IF NOT EXISTS saved_sessions (...)` migration to
+  `Database::initialize()` matching the columns `SavedSession::save` writes
+  (`id`, `connection_id`, `host`, `user`, `port`, `scrollback`, `cursor_row`,
+  `cursor_col`, `created_at`).
 
 ---
 

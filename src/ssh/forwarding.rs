@@ -268,3 +268,113 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_local_defaults() {
+        let forward = PortForward::new_local(8080, "example.com".to_string(), 80);
+        assert_eq!(forward.forward_type, ForwardType::Local);
+        assert_eq!(forward.listen_addr, "127.0.0.1");
+        assert_eq!(forward.listen_port, 8080);
+        assert_eq!(forward.remote_host, "example.com");
+        assert_eq!(forward.remote_port, 80);
+        assert!(!forward.active);
+    }
+
+    #[test]
+    fn test_new_remote_defaults() {
+        let forward = PortForward::new_remote(9090, "localhost".to_string(), 3000);
+        assert_eq!(forward.forward_type, ForwardType::Remote);
+        assert_eq!(forward.listen_addr, "0.0.0.0");
+        assert_eq!(forward.listen_port, 9090);
+        assert_eq!(forward.remote_host, "localhost");
+        assert_eq!(forward.remote_port, 3000);
+        assert!(!forward.active);
+    }
+
+    #[test]
+    fn test_new_dynamic_defaults() {
+        let forward = PortForward::new_dynamic(1080);
+        assert_eq!(forward.forward_type, ForwardType::Dynamic);
+        assert_eq!(forward.listen_addr, "127.0.0.1");
+        assert_eq!(forward.listen_port, 1080);
+        assert_eq!(forward.remote_host, "");
+        assert_eq!(forward.remote_port, 0);
+        assert!(!forward.active);
+    }
+
+    #[test]
+    fn test_new_local_zero_port() {
+        // Boundary: port 0 (ephemeral) must be accepted, not rejected.
+        let forward = PortForward::new_local(0, String::new(), 0);
+        assert_eq!(forward.listen_port, 0);
+        assert_eq!(forward.remote_port, 0);
+        assert_eq!(forward.remote_host, "");
+    }
+
+    #[test]
+    fn test_forward_type_equality() {
+        assert_eq!(ForwardType::Local, ForwardType::Local);
+        assert_ne!(ForwardType::Local, ForwardType::Remote);
+        assert_ne!(ForwardType::Remote, ForwardType::Dynamic);
+    }
+
+    #[test]
+    fn test_port_forward_ids_are_unique() {
+        let a = PortForward::new_local(1, "h".to_string(), 1);
+        let b = PortForward::new_local(1, "h".to_string(), 1);
+        assert_ne!(a.id, b.id);
+    }
+
+    #[tokio::test]
+    async fn test_forwarding_manager_add_list_remove() {
+        let manager = ForwardingManager::new();
+        assert!(manager.list_forwards().await.is_empty());
+
+        let forward = PortForward::new_local(8080, "example.com".to_string(), 80);
+        let id = forward.id;
+        manager.add_forward(forward).await;
+
+        let forwards = manager.list_forwards().await;
+        assert_eq!(forwards.len(), 1);
+        assert_eq!(forwards[0].id, id);
+
+        manager.remove_forward(id).await;
+        assert!(manager.list_forwards().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_forwarding_manager_remove_nonexistent_is_noop() {
+        let manager = ForwardingManager::new();
+        manager
+            .add_forward(PortForward::new_local(8080, "example.com".to_string(), 80))
+            .await;
+
+        // Removing an id that was never added must not touch existing entries.
+        manager.remove_forward(uuid::Uuid::new_v4()).await;
+        assert_eq!(manager.list_forwards().await.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_forwarding_manager_add_multiple() {
+        let manager = ForwardingManager::new();
+        manager
+            .add_forward(PortForward::new_local(1, "a".to_string(), 1))
+            .await;
+        manager
+            .add_forward(PortForward::new_remote(2, "b".to_string(), 2))
+            .await;
+        manager.add_forward(PortForward::new_dynamic(3)).await;
+
+        assert_eq!(manager.list_forwards().await.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_forwarding_manager_default() {
+        let manager = ForwardingManager::default();
+        assert!(manager.list_forwards().await.is_empty());
+    }
+}

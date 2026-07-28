@@ -275,3 +275,145 @@ impl SettingsScreen {
 pub enum SettingsAction {
     Save(Settings),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::settings::{BellStyle, CursorStyle};
+
+    /// Run `f` against a live `Context` + `Ui` pair inside a headless
+    /// egui frame, matching the pattern in `keyboard.rs`.
+    fn with_ctx_and_ui(f: impl FnOnce(&Context, &mut Ui)) {
+        let ctx = Context::default();
+        let mut f = Some(f);
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            if let Some(f) = f.take() {
+                let inner_ctx = ui.ctx().clone();
+                f(&inner_ctx, ui);
+            }
+        });
+    }
+
+    #[test]
+    fn test_new_starts_unmodified() {
+        let screen = SettingsScreen::new(Settings::default());
+        assert!(!screen.modified);
+    }
+
+    #[test]
+    fn test_render_default_settings_without_interaction_returns_none() {
+        let mut screen = SettingsScreen::new(Settings::default());
+        with_ctx_and_ui(|ctx, ui| {
+            let action = screen.render(ctx, ui);
+            assert!(action.is_none());
+        });
+        // No user interaction occurred, so nothing should have changed.
+        assert!(!screen.modified);
+    }
+
+    #[test]
+    fn test_render_with_unicode_settings_does_not_panic() {
+        let settings = Settings {
+            default_shell: "/bin/日本語シェル".to_string(),
+            font_family: "コード 🖥️".to_string(),
+            selected_theme: "Custom テーマ".to_string(),
+            log_level: "info".to_string(),
+            ..Settings::default()
+        };
+        let mut screen = SettingsScreen::new(settings);
+        with_ctx_and_ui(|ctx, ui| {
+            screen.render(ctx, ui);
+        });
+    }
+
+    #[test]
+    fn test_render_with_empty_strings_does_not_panic() {
+        let settings = Settings {
+            default_shell: String::new(),
+            font_family: String::new(),
+            selected_theme: String::new(),
+            log_level: String::new(),
+            ..Settings::default()
+        };
+        let mut screen = SettingsScreen::new(settings);
+        with_ctx_and_ui(|ctx, ui| {
+            screen.render(ctx, ui);
+        });
+    }
+
+    #[test]
+    fn test_render_with_boundary_numeric_settings_does_not_panic() {
+        let settings = Settings {
+            font_size: 8.0,
+            scrollback_lines: 1000,
+            default_port: 1,
+            connection_timeout: 5,
+            keepalive_interval: 0,
+            auto_lock_timeout: 0,
+            ..Settings::default()
+        };
+        let mut screen = SettingsScreen::new(settings);
+        with_ctx_and_ui(|ctx, ui| {
+            screen.render(ctx, ui);
+        });
+
+        let settings_max = Settings {
+            font_size: 32.0,
+            scrollback_lines: 100_000,
+            default_port: 65535,
+            connection_timeout: 300,
+            keepalive_interval: 600,
+            auto_lock_timeout: 120,
+            ..Settings::default()
+        };
+        let mut screen_max = SettingsScreen::new(settings_max);
+        with_ctx_and_ui(|ctx, ui| {
+            screen_max.render(ctx, ui);
+        });
+    }
+
+    #[test]
+    fn test_render_with_all_cursor_and_bell_style_variants() {
+        for cursor_style in [
+            CursorStyle::Block,
+            CursorStyle::Beam,
+            CursorStyle::Underline,
+        ] {
+            for bell_style in [BellStyle::None, BellStyle::Visual, BellStyle::Audio] {
+                let settings = Settings {
+                    cursor_style: cursor_style.clone(),
+                    bell_style: bell_style.clone(),
+                    ..Settings::default()
+                };
+                let mut screen = SettingsScreen::new(settings);
+                with_ctx_and_ui(|ctx, ui| {
+                    screen.render(ctx, ui);
+                });
+            }
+        }
+    }
+
+    #[test]
+    fn test_screen_retains_constructed_settings_fields() {
+        let settings = Settings {
+            font_size: 21.5,
+            default_shell: "/bin/zsh".to_string(),
+            ..Settings::default()
+        };
+        let screen = SettingsScreen::new(settings);
+        assert_eq!(screen.settings.font_size, 21.5);
+        assert_eq!(screen.settings.default_shell, "/bin/zsh");
+    }
+
+    #[test]
+    fn test_settings_action_save_debug_and_clone() {
+        let action = SettingsAction::Save(Settings::default());
+        let cloned = action.clone();
+        match cloned {
+            SettingsAction::Save(settings) => {
+                assert_eq!(settings.default_shell, Settings::default().default_shell);
+            }
+        }
+        assert!(!format!("{:?}", action).is_empty());
+    }
+}

@@ -537,3 +537,360 @@ impl Default for StatusBar {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Run `f` against a freshly built `egui::Ui` inside a headless context,
+    /// mirroring the pattern used in `keyboard.rs` for widget code that
+    /// needs a live `Ui` rather than just a `Context`.
+    fn with_ui(f: impl FnOnce(&mut egui::Ui)) {
+        let ctx = egui::Context::default();
+        let mut f = Some(f);
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            if let Some(f) = f.take() {
+                f(ui);
+            }
+        });
+    }
+
+    #[test]
+    fn test_button_styles_render_without_panic() {
+        with_ui(|ui| {
+            button(ui, "Click", ButtonStyle::Primary);
+            button(ui, "Click", ButtonStyle::Secondary);
+            button(ui, "Click", ButtonStyle::Danger);
+            button(ui, "Click", ButtonStyle::Ghost);
+        });
+    }
+
+    #[test]
+    fn test_button_empty_and_unicode_text() {
+        with_ui(|ui| {
+            button(ui, "", ButtonStyle::Primary);
+            button(ui, "日本語 🚀 テスト", ButtonStyle::Primary);
+        });
+    }
+
+    #[test]
+    fn test_primary_secondary_danger_button_helpers() {
+        with_ui(|ui| {
+            primary_button(ui, "Save");
+            secondary_button(ui, "Cancel");
+            danger_button(ui, "Delete");
+        });
+    }
+
+    #[test]
+    fn test_toggle_off_and_on() {
+        with_ui(|ui| {
+            let mut enabled = false;
+            toggle(ui, &mut enabled);
+            assert!(!enabled);
+        });
+        with_ui(|ui| {
+            let mut enabled = true;
+            toggle(ui, &mut enabled);
+            assert!(enabled);
+        });
+    }
+
+    #[test]
+    fn test_labeled_toggle_renders() {
+        with_ui(|ui| {
+            let mut enabled = false;
+            labeled_toggle(ui, "Enable feature", &mut enabled);
+        });
+    }
+
+    #[test]
+    fn test_checkbox_renders() {
+        with_ui(|ui| {
+            let mut checked = false;
+            checkbox(ui, &mut checked, "Remember me");
+        });
+    }
+
+    #[test]
+    fn test_dropdown_renders_with_options() {
+        with_ui(|ui| {
+            let mut selected = "b".to_string();
+            let options = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+            dropdown(ui, "dropdown-id", &mut selected, &options);
+        });
+    }
+
+    #[test]
+    fn test_dropdown_renders_with_empty_options() {
+        with_ui(|ui| {
+            let mut selected = "x".to_string();
+            let options: Vec<String> = Vec::new();
+            dropdown(ui, "dropdown-empty", &mut selected, &options);
+        });
+    }
+
+    #[test]
+    fn test_labeled_dropdown_renders() {
+        with_ui(|ui| {
+            let mut selected = "a".to_string();
+            let options = vec!["a".to_string(), "b".to_string()];
+            labeled_dropdown(ui, "Theme", "labeled-dropdown-id", &mut selected, &options);
+        });
+    }
+
+    #[test]
+    fn test_text_input_renders_with_value_and_hint() {
+        with_ui(|ui| {
+            let mut value = "hello".to_string();
+            text_input(ui, &mut value, "Enter text");
+        });
+    }
+
+    #[test]
+    fn test_text_input_renders_empty_and_unicode() {
+        with_ui(|ui| {
+            let mut value = String::new();
+            text_input(ui, &mut value, "");
+        });
+        with_ui(|ui| {
+            let mut value = "héllo wörld 日本語".to_string();
+            text_input(ui, &mut value, "hint");
+        });
+    }
+
+    #[test]
+    fn test_labeled_input_renders() {
+        with_ui(|ui| {
+            let mut value = "user".to_string();
+            labeled_input(ui, "Username", &mut value, "Enter username");
+        });
+    }
+
+    #[test]
+    fn test_password_input_renders() {
+        with_ui(|ui| {
+            let mut value = "secret".to_string();
+            password_input(ui, &mut value, "Password");
+        });
+    }
+
+    #[test]
+    fn test_number_input_renders() {
+        with_ui(|ui| {
+            let mut value: u16 = 22;
+            number_input(ui, &mut value, 1, 65535);
+        });
+    }
+
+    #[test]
+    fn test_number_input_boundary_values() {
+        with_ui(|ui| {
+            let mut value: u16 = 0;
+            number_input(ui, &mut value, 0, 65535);
+            assert_eq!(value, 0);
+        });
+        with_ui(|ui| {
+            let mut value: u16 = 65535;
+            number_input(ui, &mut value, 0, 65535);
+            assert_eq!(value, 65535);
+        });
+    }
+
+    #[test]
+    fn test_labeled_number_renders() {
+        with_ui(|ui| {
+            let mut value: u16 = 22;
+            labeled_number(ui, "Port", &mut value, 1, 65535);
+        });
+    }
+
+    #[test]
+    fn test_section_and_subsection_headers_render() {
+        with_ui(|ui| {
+            section_header(ui, "General");
+            subsection_header(ui, "Advanced");
+        });
+    }
+
+    #[test]
+    fn test_section_header_empty_title() {
+        with_ui(|ui| {
+            section_header(ui, "");
+        });
+    }
+
+    #[test]
+    fn test_card_renders_contents() {
+        with_ui(|ui| {
+            card(ui, |ui| {
+                ui.label("inside card");
+            });
+        });
+    }
+
+    #[test]
+    fn test_status_badge_all_variants_render() {
+        with_ui(|ui| {
+            status_badge(ui, StatusType::Connected);
+            status_badge(ui, StatusType::Connecting);
+            status_badge(ui, StatusType::Disconnected);
+            status_badge(ui, StatusType::Error);
+        });
+    }
+
+    #[test]
+    fn test_icon_button_renders() {
+        with_ui(|ui| {
+            icon_button(ui, "🗑", "Delete");
+        });
+    }
+
+    #[test]
+    fn test_nav_item_selected_and_unselected() {
+        with_ui(|ui| {
+            nav_item(ui, "🏠", "Home", true);
+            nav_item(ui, "⚙", "Settings", false);
+        });
+    }
+
+    #[test]
+    fn test_divider_renders() {
+        with_ui(|ui| {
+            divider(ui);
+        });
+    }
+
+    #[test]
+    fn test_empty_state_renders_with_unicode() {
+        with_ui(|ui| {
+            empty_state(
+                ui,
+                "📭",
+                "No connections",
+                "Add a connection to get started 日本語",
+            );
+        });
+    }
+
+    #[test]
+    fn test_empty_state_renders_with_empty_strings() {
+        with_ui(|ui| {
+            empty_state(ui, "", "", "");
+        });
+    }
+
+    #[test]
+    fn test_form_row_renders_contents() {
+        with_ui(|ui| {
+            form_row(ui, |ui| {
+                ui.label("row content");
+            });
+        });
+    }
+
+    #[test]
+    fn test_with_tooltip_returns_inner_value() {
+        with_ui(|ui| {
+            let value = with_tooltip(ui, "a tooltip", |ui| {
+                ui.label("tooltipped");
+                42
+            });
+            assert_eq!(value, 42);
+        });
+    }
+
+    #[test]
+    fn test_tab_bar_new_and_default_start_empty() {
+        let bar = TabBar::new();
+        assert_eq!(bar.tabs.len(), 0);
+        assert_eq!(bar.active, 0);
+
+        let default_bar = TabBar::default();
+        assert_eq!(default_bar.tabs.len(), 0);
+        assert_eq!(default_bar.active, 0);
+    }
+
+    #[test]
+    fn test_tab_bar_render_with_no_tabs_returns_none() {
+        let mut bar = TabBar::new();
+        with_ui(|ui| {
+            let action = bar.render(ui);
+            assert!(action.is_none());
+        });
+    }
+
+    #[test]
+    fn test_tab_bar_render_with_tabs() {
+        let mut bar = TabBar::new();
+        bar.tabs.push("Tab 1".to_string());
+        bar.tabs.push("Tab 2".to_string());
+        with_ui(|ui| {
+            let action = bar.render(ui);
+            // No click was simulated, so no action should be emitted.
+            assert!(action.is_none());
+        });
+    }
+
+    #[test]
+    fn test_tab_bar_action_debug_and_clone() {
+        let action = TabBarAction::SelectTab(2);
+        let cloned = action.clone();
+        assert!(!format!("{:?}", cloned).is_empty());
+
+        assert!(!format!("{:?}", TabBarAction::NewTab).is_empty());
+        assert!(!format!("{:?}", TabBarAction::CloseTab(0)).is_empty());
+    }
+
+    #[test]
+    fn test_toolbar_render_without_click_returns_none() {
+        with_ui(|ui| {
+            let action = Toolbar::render(ui);
+            assert!(action.is_none());
+        });
+    }
+
+    #[test]
+    fn test_toolbar_action_debug_and_clone() {
+        let action = ToolbarAction::NewConnection;
+        let cloned = action.clone();
+        assert!(!format!("{:?}", cloned).is_empty());
+        assert!(!format!("{:?}", ToolbarAction::OpenSettings).is_empty());
+    }
+
+    #[test]
+    fn test_status_bar_new_has_no_message() {
+        let bar = StatusBar::new();
+        assert!(bar.message.is_none());
+    }
+
+    #[test]
+    fn test_status_bar_default_matches_new() {
+        let bar = StatusBar::default();
+        assert!(bar.message.is_none());
+    }
+
+    #[test]
+    fn test_status_bar_set_message_updates_message() {
+        let mut bar = StatusBar::new();
+        bar.set_message("Connected to host");
+        assert_eq!(bar.message.as_deref(), Some("Connected to host"));
+    }
+
+    #[test]
+    fn test_status_bar_render_without_message() {
+        let mut bar = StatusBar::new();
+        with_ui(|ui| {
+            bar.render(ui);
+        });
+    }
+
+    #[test]
+    fn test_status_bar_render_with_message() {
+        let mut bar = StatusBar::new();
+        bar.set_message("Ready 日本語");
+        with_ui(|ui| {
+            bar.render(ui);
+        });
+    }
+}

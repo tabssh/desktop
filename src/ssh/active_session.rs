@@ -296,3 +296,132 @@ async fn run_shell_session(
         .await;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build an ActiveSession backed by channels we control, bypassing the
+    /// real SSH connect path so command/event plumbing can be tested
+    /// without a live server.
+    fn make_session() -> (
+        ActiveSession,
+        mpsc::Sender<SessionEvent>,
+        mpsc::Receiver<SessionCommand>,
+    ) {
+        let (event_tx, event_rx) = mpsc::channel(16);
+        let (command_tx, command_rx) = mpsc::channel(16);
+        let session = ActiveSession {
+            id: Uuid::new_v4(),
+            host: "example.com".to_string(),
+            username: "user".to_string(),
+            port: 22,
+            event_rx,
+            command_tx,
+        };
+        (session, event_tx, command_rx)
+    }
+
+    #[test]
+    fn test_session_handler_new_stores_host() {
+        let handler = SessionHandler::new("example.com");
+        assert_eq!(handler.host, "example.com");
+    }
+
+    #[test]
+    fn test_try_recv_empty_returns_none() {
+        let (mut session, _event_tx, _command_rx) = make_session();
+        assert!(session.try_recv().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_try_recv_returns_sent_event() {
+        let (mut session, event_tx, _command_rx) = make_session();
+        event_tx.send(SessionEvent::Connected).await.unwrap();
+
+        match session.try_recv() {
+            Some(SessionEvent::Connected) => {}
+            other => panic!("expected Connected event, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_try_recv_preserves_order() {
+        let (mut session, event_tx, _command_rx) = make_session();
+        event_tx
+            .send(SessionEvent::Data(vec![1, 2, 3]))
+            .await
+            .unwrap();
+        event_tx
+            .send(SessionEvent::Error("oops".to_string()))
+            .await
+            .unwrap();
+
+        match session.try_recv() {
+            Some(SessionEvent::Data(data)) => assert_eq!(data, vec![1, 2, 3]),
+            other => panic!("expected Data event first, got {:?}", other),
+        }
+        match session.try_recv() {
+            Some(SessionEvent::Error(msg)) => assert_eq!(msg, "oops"),
+            other => panic!("expected Error event second, got {:?}", other),
+        }
+        assert!(session.try_recv().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_send_data_forwards_command() {
+        let (session, _event_tx, mut command_rx) = make_session();
+        session.send_data(vec![9, 8, 7]);
+
+        match command_rx.recv().await {
+            Some(SessionCommand::SendData(data)) => assert_eq!(data, vec![9, 8, 7]),
+            other => panic!("expected SendData command, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_send_data_empty_vec() {
+        let (session, _event_tx, mut command_rx) = make_session();
+        session.send_data(vec![]);
+
+        match command_rx.recv().await {
+            Some(SessionCommand::SendData(data)) => assert!(data.is_empty()),
+            other => panic!("expected SendData command, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_resize_forwards_command() {
+        let (session, _event_tx, mut command_rx) = make_session();
+        session.resize(120, 40);
+
+        match command_rx.recv().await {
+            Some(SessionCommand::Resize(cols, rows)) => {
+                assert_eq!(cols, 120);
+                assert_eq!(rows, 40);
+            }
+            other => panic!("expected Resize command, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_disconnect_forwards_command() {
+        let (session, _event_tx, mut command_rx) = make_session();
+        session.disconnect();
+
+        match command_rx.recv().await {
+            Some(SessionCommand::Disconnect) => {}
+            other => panic!("expected Disconnect command, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_send_data_after_receiver_dropped_does_not_panic() {
+        let (session, _event_tx, command_rx) = make_session();
+        drop(command_rx);
+        // try_send on a closed channel must fail silently, not panic.
+        session.send_data(vec![1]);
+        session.resize(1, 1);
+        session.disconnect();
+    }
+}

@@ -80,3 +80,110 @@ impl SavedSession {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::database::Database;
+
+    // NOTE: `Database::initialize()` (src/storage/database.rs) never creates a
+    // `saved_sessions` table (it only creates `connections`, `ssh_keys`,
+    // `known_hosts`, `themes`, `settings`). As a result every method here
+    // currently fails against a freshly-initialized database with
+    // "no such table: saved_sessions". These tests document that actual,
+    // current (buggy) behavior rather than asserting a happy path that does
+    // not exist yet. This is flagged separately as a bug outside the scope
+    // of this test-only change (see TODO.AI.md).
+
+    fn sample_session(id: &str) -> SavedSession {
+        SavedSession {
+            id: id.to_string(),
+            connection_id: "conn-1".to_string(),
+            host: "example.com".to_string(),
+            user: "root".to_string(),
+            port: 22,
+            scrollback: vec!["line1".to_string(), "line2".to_string()],
+            cursor_row: 3,
+            cursor_col: 7,
+            created_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn save_fails_because_saved_sessions_table_does_not_exist() {
+        let db = Database::open_in_memory().unwrap();
+        let session = sample_session("s1");
+
+        let result = session.save(&db);
+
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("no such table"),
+            "unexpected error message: {msg}"
+        );
+    }
+
+    #[test]
+    fn load_all_fails_because_saved_sessions_table_does_not_exist() {
+        let db = Database::open_in_memory().unwrap();
+
+        let result = SavedSession::load_all(&db);
+
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("no such table"),
+            "unexpected error message: {msg}"
+        );
+    }
+
+    #[test]
+    fn delete_fails_because_saved_sessions_table_does_not_exist() {
+        let db = Database::open_in_memory().unwrap();
+
+        let result = SavedSession::delete("s1", &db);
+
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("no such table"),
+            "unexpected error message: {msg}"
+        );
+    }
+
+    #[test]
+    fn delete_on_empty_id_also_fails_same_way() {
+        let db = Database::open_in_memory().unwrap();
+
+        let result = SavedSession::delete("", &db);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn sample_session_round_trips_field_values() {
+        // Boundary/happy-path check on the struct itself, independent of
+        // the broken persistence layer: verifies field construction and
+        // clone semantics are correct.
+        let session = sample_session("s1");
+        let cloned = session.clone();
+
+        assert_eq!(cloned.id, "s1");
+        assert_eq!(cloned.connection_id, "conn-1");
+        assert_eq!(cloned.host, "example.com");
+        assert_eq!(cloned.user, "root");
+        assert_eq!(cloned.port, 22);
+        assert_eq!(cloned.scrollback, vec!["line1", "line2"]);
+        assert_eq!(cloned.cursor_row, 3);
+        assert_eq!(cloned.cursor_col, 7);
+    }
+
+    #[test]
+    fn sample_session_supports_empty_scrollback() {
+        let mut session = sample_session("s2");
+        session.scrollback = vec![];
+
+        assert!(session.scrollback.is_empty());
+    }
+}

@@ -291,3 +291,93 @@ impl TerminalRenderer {
 fn color_to_egui(color: Color) -> Color32 {
     Color32::from_rgb(color.r, color.g, color.b)
 }
+
+// Note: `render` and `calculate_char_size` require a live `egui::Ui` (font
+// layout, painter allocation, input polling) and are not exercisable from a
+// plain unit test without a running egui context, so they are intentionally
+// left untested here. The pure/state-only helpers below are covered.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::terminal::buffer::TerminalBuffer;
+
+    #[test]
+    fn test_renderer_config_default() {
+        let config = RendererConfig::default();
+        assert_eq!(config.font_size, 14.0);
+        assert_eq!(config.font_family, "monospace");
+        assert_eq!(config.cursor_style, CursorStyle::Block);
+        assert!(config.cursor_blink);
+        assert!(config.show_scrollbar);
+    }
+
+    #[test]
+    fn test_new_starts_at_zero_scroll_offset() {
+        let renderer = TerminalRenderer::new(RendererConfig::default());
+        assert_eq!(renderer.scroll_offset(), 0);
+    }
+
+    #[test]
+    fn test_set_and_get_scroll_offset() {
+        let mut renderer = TerminalRenderer::new(RendererConfig::default());
+        renderer.set_scroll_offset(42);
+        assert_eq!(renderer.scroll_offset(), 42);
+    }
+
+    #[test]
+    fn test_scroll_to_bottom_on_empty_buffer_clamps_to_zero() {
+        let mut renderer = TerminalRenderer::new(RendererConfig::default());
+        let buffer = TerminalBuffer::new(80, 24, 1000);
+        // No scrollback yet and total rows (24) < the hardcoded visible_rows (24)
+        // used internally, so this must saturate to zero rather than underflow.
+        renderer.scroll_to_bottom(&buffer);
+        assert_eq!(renderer.scroll_offset(), 0);
+    }
+
+    #[test]
+    fn test_scroll_to_bottom_with_scrollback_advances_offset() {
+        let mut renderer = TerminalRenderer::new(RendererConfig::default());
+        let mut buffer = TerminalBuffer::new(80, 5, 1000);
+        // Push enough lines to build up scrollback beyond the visible area.
+        for i in 0..50 {
+            buffer.write_str(&format!("line {}\r\n", i));
+        }
+        renderer.scroll_to_bottom(&buffer);
+        assert!(renderer.scroll_offset() > 0);
+    }
+
+    #[test]
+    fn test_calculate_size_uses_char_dimensions() {
+        let renderer = TerminalRenderer::new(RendererConfig::default());
+        // char_width/char_height are 0.0 until calculate_char_size() runs under
+        // a live Ui, so calculate_size() must clamp the divisor to avoid a
+        // divide-by-zero and still return a sane minimum size.
+        let (cols, rows) = renderer.calculate_size(800.0, 600.0);
+        assert_eq!(cols, 800);
+        assert_eq!(rows, 600);
+    }
+
+    #[test]
+    fn test_calculate_size_never_zero() {
+        let renderer = TerminalRenderer::new(RendererConfig::default());
+        let (cols, rows) = renderer.calculate_size(0.0, 0.0);
+        assert_eq!(cols, 1);
+        assert_eq!(rows, 1);
+    }
+
+    #[test]
+    fn test_color_to_egui_preserves_channels() {
+        let color = Color::rgb(10, 20, 30);
+        let egui_color = color_to_egui(color);
+        assert_eq!(egui_color.r(), 10);
+        assert_eq!(egui_color.g(), 20);
+        assert_eq!(egui_color.b(), 30);
+    }
+
+    #[test]
+    fn test_cursor_style_variants_distinct() {
+        assert_ne!(CursorStyle::Block, CursorStyle::Underline);
+        assert_ne!(CursorStyle::Underline, CursorStyle::Beam);
+        assert_eq!(CursorStyle::Block, CursorStyle::Block);
+    }
+}

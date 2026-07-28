@@ -111,7 +111,14 @@ impl<'a> Perform for TerminalPerformer<'a> {
 
     fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], _ignore: bool, c: char) {
         let params: Vec<u16> = params.iter().map(|p| p[0]).collect();
-        let param = |i: usize, default: u16| params.get(i).copied().unwrap_or(default);
+        // Per ECMA-48, an omitted parameter and an explicit value of 0 both
+        // mean "use the default" for these commands; vte reports a bare
+        // "CSI @"/"CSI L" etc. (no digits) as a single param of 0 rather
+        // than an empty list, so unwrap_or(default) alone never fires.
+        let param = |i: usize, default: u16| match params.get(i).copied().unwrap_or(default) {
+            0 => default,
+            v => v,
+        };
 
         match c {
             'A' => {
@@ -435,5 +442,566 @@ impl<'a> TerminalPerformer<'a> {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parser() -> TerminalParser {
+        TerminalParser::new(10, 5, 100)
+    }
+
+    #[test]
+    fn test_plain_printable_text() {
+        let mut p = parser();
+        p.process(b"hello");
+        let buf = p.buffer();
+        assert_eq!(buf.get_cell(0, 0).unwrap().character, 'h');
+        assert_eq!(buf.get_cell(1, 0).unwrap().character, 'e');
+        assert_eq!(buf.get_cell(4, 0).unwrap().character, 'o');
+        assert_eq!(buf.cursor_position(), (5, 0));
+    }
+
+    #[test]
+    fn test_empty_input() {
+        let mut p = parser();
+        p.process(b"");
+        let buf = p.buffer();
+        assert_eq!(buf.cursor_position(), (0, 0));
+        assert_eq!(buf.get_cell(0, 0).unwrap().character, ' ');
+    }
+
+    #[test]
+    fn test_c0_newline_carriage_return() {
+        let mut p = parser();
+        p.process(b"ab\r\ncd");
+        let buf = p.buffer();
+        // \r moves to col 0, \n moves to next row
+        assert_eq!(buf.get_cell(0, 0).unwrap().character, 'a');
+        assert_eq!(buf.get_cell(1, 0).unwrap().character, 'b');
+        assert_eq!(buf.get_cell(0, 1).unwrap().character, 'c');
+        assert_eq!(buf.get_cell(1, 1).unwrap().character, 'd');
+    }
+
+    #[test]
+    fn test_c0_tab() {
+        let mut p = parser();
+        p.process(b"\t");
+        assert_eq!(p.buffer().cursor_position(), (8, 0));
+    }
+
+    #[test]
+    fn test_c0_backspace() {
+        let mut p = parser();
+        p.process(b"abc\x08");
+        assert_eq!(p.buffer().cursor_position(), (2, 0));
+    }
+
+    #[test]
+    fn test_csi_cursor_up_down_left_right() {
+        let mut p = parser();
+        // move to middle of screen first
+        p.process(b"\x1b[3;3H");
+        assert_eq!(p.buffer().cursor_position(), (2, 2));
+
+        p.process(b"\x1b[A"); // up 1
+        assert_eq!(p.buffer().cursor_position(), (2, 1));
+
+        p.process(b"\x1b[2B"); // down 2
+        assert_eq!(p.buffer().cursor_position(), (2, 3));
+
+        p.process(b"\x1b[C"); // right 1
+        assert_eq!(p.buffer().cursor_position(), (3, 3));
+
+        p.process(b"\x1b[2D"); // left 2
+        assert_eq!(p.buffer().cursor_position(), (1, 3));
+    }
+
+    #[test]
+    fn test_csi_cursor_position_default_params() {
+        let mut p = parser();
+        p.process(b"\x1b[H");
+        assert_eq!(p.buffer().cursor_position(), (0, 0));
+
+        p.process(b"\x1b[4;5H");
+        assert_eq!(p.buffer().cursor_position(), (4, 3));
+    }
+
+    #[test]
+    fn test_csi_sgr_bold_and_reset() {
+        let mut p = parser();
+        p.process(b"\x1b[1mA\x1b[0mB");
+        let buf = p.buffer();
+        assert!(buf.get_cell(0, 0).unwrap().attrs.bold);
+        assert!(!buf.get_cell(1, 0).unwrap().attrs.bold);
+    }
+
+    #[test]
+    fn test_csi_sgr_multiple_params() {
+        let mut p = parser();
+        // bold + underline + red fg in one sequence
+        p.process(b"\x1b[1;4;31mA");
+        let cell = p.buffer().get_cell(0, 0).unwrap();
+        assert!(cell.attrs.bold);
+        assert!(cell.attrs.underline);
+        assert_eq!(cell.fg, Color::rgb(205, 49, 49));
+    }
+
+    #[test]
+    fn test_csi_sgr_basic_fg_bg_colors() {
+        let mut p = parser();
+        p.process(b"\x1b[32;44mA");
+        let cell = p.buffer().get_cell(0, 0).unwrap();
+        assert_eq!(cell.fg, Color::rgb(13, 188, 121));
+        assert_eq!(cell.bg, Color::rgb(36, 114, 200));
+    }
+
+    #[test]
+    fn test_csi_sgr_bright_fg_bg_colors() {
+        let mut p = parser();
+        p.process(b"\x1b[92;104mA");
+        let cell = p.buffer().get_cell(0, 0).unwrap();
+        assert_eq!(cell.fg, ANSI_BRIGHT_COLORS[2]);
+        assert_eq!(cell.bg, ANSI_BRIGHT_COLORS[4]);
+    }
+
+    #[test]
+    fn test_csi_sgr_256_color() {
+        let mut p = parser();
+        p.process(b"\x1b[38;5;196mA");
+        let cell = p.buffer().get_cell(0, 0).unwrap();
+        // index 196 is in the 16..=231 cube range
+        let idx = 196u16 - 16;
+        let r = ((idx / 36) * 51) as u8;
+        let g = (((idx / 6) % 6) * 51) as u8;
+        let b = ((idx % 6) * 51) as u8;
+        assert_eq!(cell.fg, Color::rgb(r, g, b));
+    }
+
+    #[test]
+    fn test_csi_sgr_rgb_truecolor() {
+        let mut p = parser();
+        p.process(b"\x1b[38;2;10;20;30mA");
+        let cell = p.buffer().get_cell(0, 0).unwrap();
+        assert_eq!(cell.fg, Color::rgb(10, 20, 30));
+    }
+
+    #[test]
+    fn test_csi_sgr_fg_bg_reset_defaults() {
+        let mut p = parser();
+        p.process(b"\x1b[31;41mA\x1b[39;49mB");
+        let buf = p.buffer();
+        assert_eq!(buf.get_cell(0, 0).unwrap().fg, Color::rgb(205, 49, 49));
+        assert_eq!(buf.get_cell(1, 0).unwrap().fg, Color::WHITE);
+        assert_eq!(buf.get_cell(1, 0).unwrap().bg, Color::BLACK);
+    }
+
+    #[test]
+    fn test_csi_clear_screen() {
+        let mut p = parser();
+        p.process(b"hello\x1b[2J");
+        let buf = p.buffer();
+        for x in 0..5 {
+            assert_eq!(buf.get_cell(x, 0).unwrap().character, ' ');
+        }
+    }
+
+    #[test]
+    fn test_csi_clear_line() {
+        let mut p = parser();
+        p.process(b"hello\r\x1b[K");
+        let buf = p.buffer();
+        for x in 0..5 {
+            assert_eq!(buf.get_cell(x, 0).unwrap().character, ' ');
+        }
+    }
+
+    #[test]
+    fn test_osc_window_title_bel_terminated() {
+        let mut p = parser();
+        // OSC 0 ; title BEL - parser currently ignores osc_dispatch, but must
+        // not corrupt buffer state or panic, and subsequent text still prints.
+        p.process(b"\x1b]0;My Title\x07X");
+        assert_eq!(p.buffer().get_cell(0, 0).unwrap().character, 'X');
+    }
+
+    #[test]
+    fn test_osc_window_title_st_terminated() {
+        let mut p = parser();
+        // OSC terminated with ESC \\ (ST) instead of BEL
+        p.process(b"\x1b]0;My Title\x1b\\X");
+        assert_eq!(p.buffer().get_cell(0, 0).unwrap().character, 'X');
+    }
+
+    #[test]
+    fn test_lone_esc_no_followup() {
+        let mut p = parser();
+        p.process(b"A\x1b");
+        // Should not panic; printable char before the lone ESC is retained.
+        assert_eq!(p.buffer().get_cell(0, 0).unwrap().character, 'A');
+    }
+
+    #[test]
+    fn test_truncated_csi_no_terminator() {
+        let mut p = parser();
+        p.process(b"A\x1b[1;2");
+        // No final byte supplied; parser must not panic and prior state stays intact.
+        assert_eq!(p.buffer().get_cell(0, 0).unwrap().character, 'A');
+
+        // Feeding the terminator afterwards completes the sequence.
+        p.process(b"H");
+        assert_eq!(p.buffer().cursor_position(), (1, 0));
+    }
+
+    #[test]
+    fn test_csi_garbage_intermediate_bytes() {
+        let mut p = parser();
+        // Unsupported intermediate byte followed by a valid final byte should
+        // not panic and should be effectively ignored/handled gracefully.
+        p.process(b"A\x1b[1 zB");
+        assert_eq!(p.buffer().get_cell(0, 0).unwrap().character, 'A');
+        assert_eq!(p.buffer().get_cell(1, 0).unwrap().character, 'B');
+    }
+
+    #[test]
+    fn test_csi_param_empty_between_semicolons_uses_default() {
+        let mut p = parser();
+        // Empty param between semicolons should behave as default (0/omitted).
+        p.process(b"\x1b[;5H");
+        assert_eq!(p.buffer().cursor_position(), (4, 0));
+    }
+
+    #[test]
+    fn test_csi_param_leading_zeros() {
+        let mut p = parser();
+        // Row 007 (0-based 6) exceeds the 5-row test buffer, so set_cursor
+        // clamps it to the last row (4); col 003 (0-based 2) is unaffected.
+        p.process(b"\x1b[007;003H");
+        assert_eq!(p.buffer().cursor_position(), (2, 4));
+    }
+
+    #[test]
+    fn test_csi_param_very_large_value_clamped_by_buffer() {
+        let mut p = parser();
+        // Large row/col values must be clamped by the buffer, not panic.
+        p.process(b"\x1b[9999;9999H");
+        let (x, y) = p.buffer().cursor_position();
+        assert_eq!(x, p.buffer().size().cols - 1);
+        assert_eq!(y, p.buffer().size().rows - 1);
+    }
+
+    #[test]
+    fn test_resize_delegates_to_buffer() {
+        let mut p = parser();
+        p.resize(20, 8);
+        assert_eq!(p.buffer().size().cols, 20);
+        assert_eq!(p.buffer().size().rows, 8);
+    }
+
+    #[test]
+    fn test_buffer_mut_allows_direct_mutation() {
+        let mut p = parser();
+        p.buffer_mut().write_char('Z');
+        assert_eq!(p.buffer().get_cell(0, 0).unwrap().character, 'Z');
+    }
+
+    #[test]
+    fn test_csi_cursor_next_line_e() {
+        let mut p = parser();
+        p.process(b"\x1b[3;3H"); // (2, 2)
+        p.process(b"\x1b[2E"); // down 2 rows, col resets to 0
+        assert_eq!(p.buffer().cursor_position(), (0, 4));
+    }
+
+    #[test]
+    fn test_csi_cursor_prev_line_f() {
+        let mut p = parser();
+        p.process(b"\x1b[3;3H"); // (2, 2)
+        p.process(b"\x1b[1F"); // up 1 row, col resets to 0
+        assert_eq!(p.buffer().cursor_position(), (0, 1));
+    }
+
+    #[test]
+    fn test_csi_cursor_horizontal_absolute_g() {
+        let mut p = parser();
+        p.process(b"\x1b[3;3H"); // (2, 2)
+        p.process(b"\x1b[6G"); // column 6 (1-based) -> 5, row unchanged
+        assert_eq!(p.buffer().cursor_position(), (5, 2));
+    }
+
+    #[test]
+    fn test_csi_vertical_position_absolute_d() {
+        let mut p = parser();
+        p.process(b"\x1b[3;3H"); // (2, 2)
+        p.process(b"\x1b[5d"); // row 5 (1-based) -> 4, col unchanged
+        assert_eq!(p.buffer().cursor_position(), (2, 4));
+    }
+
+    #[test]
+    fn test_csi_insert_and_delete_lines() {
+        let mut p = parser();
+        p.process(b"aaa\r\nbbb\r\nccc");
+        p.process(b"\x1b[2;1H"); // row 1 (0-based)
+        p.process(b"\x1b[L"); // insert one blank line at row 1
+        let buf = p.buffer();
+        assert_eq!(buf.get_cell(0, 0).unwrap().character, 'a');
+        assert_eq!(buf.get_cell(0, 1).unwrap().character, ' ');
+        assert_eq!(buf.get_cell(0, 2).unwrap().character, 'b');
+
+        p.process(b"\x1b[M"); // delete the blank line back out
+        let buf = p.buffer();
+        assert_eq!(buf.get_cell(0, 1).unwrap().character, 'b');
+    }
+
+    #[test]
+    fn test_csi_delete_and_insert_chars() {
+        let mut p = parser();
+        p.process(b"abcde\r");
+        p.process(b"\x1b[2P"); // delete 2 chars at cursor (col 0)
+        let buf = p.buffer();
+        assert_eq!(buf.get_cell(0, 0).unwrap().character, 'c');
+        assert_eq!(buf.get_cell(1, 0).unwrap().character, 'd');
+        assert_eq!(buf.get_cell(2, 0).unwrap().character, 'e');
+
+        p.process(b"\r\x1b[@"); // insert 1 blank at col 0
+        let buf = p.buffer();
+        assert_eq!(buf.get_cell(0, 0).unwrap().character, ' ');
+        assert_eq!(buf.get_cell(1, 0).unwrap().character, 'c');
+    }
+
+    #[test]
+    fn test_csi_erase_chars_x() {
+        let mut p = parser();
+        p.process(b"abcde\r");
+        p.process(b"\x1b[3X"); // erase 3 chars at cursor without moving it
+        let buf = p.buffer();
+        assert_eq!(buf.get_cell(0, 0).unwrap().character, ' ');
+        assert_eq!(buf.get_cell(1, 0).unwrap().character, ' ');
+        assert_eq!(buf.get_cell(2, 0).unwrap().character, ' ');
+        assert_eq!(buf.get_cell(3, 0).unwrap().character, 'd');
+    }
+
+    #[test]
+    fn test_csi_scroll_up_and_down_s_t() {
+        let mut p = parser();
+        p.process(b"line1\r\nline2\r\nline3");
+        p.process(b"\x1b[1S"); // scroll whole buffer up 1: line1 moves to scrollback
+        assert_eq!(p.buffer().scrollback_len(), 1);
+        assert_eq!(p.buffer().get_row(0).unwrap()[0].character, 'l');
+
+        p.process(b"\x1b[1T"); // scroll down 1: top row becomes blank again
+        assert_eq!(p.buffer().get_row(0).unwrap()[0].character, ' ');
+    }
+
+    #[test]
+    fn test_csi_save_restore_cursor_s_u() {
+        let mut p = parser();
+        p.process(b"\x1b[3;4H"); // (3, 2)
+        p.process(b"\x1b[s"); // CSI s save
+        p.process(b"\x1b[1;1H");
+        assert_eq!(p.buffer().cursor_position(), (0, 0));
+        p.process(b"\x1b[u"); // CSI u restore
+        assert_eq!(p.buffer().cursor_position(), (3, 2));
+    }
+
+    #[test]
+    fn test_csi_scroll_region_and_origin_mode() {
+        let mut p = parser();
+        // Set scroll region rows 2..=4 (1-based) -> 1..=3 (0-based)
+        p.process(b"\x1b[2;4r");
+        // Enable origin mode (DECOM)
+        p.process(b"\x1b[?6h");
+        // With origin mode on, row 0 is relative to the scroll region top.
+        p.process(b"\x1b[1;1H");
+        assert_eq!(p.buffer().cursor_position(), (0, 1));
+
+        // Disable origin mode; absolute addressing resumes.
+        p.process(b"\x1b[?6l");
+        p.process(b"\x1b[1;1H");
+        assert_eq!(p.buffer().cursor_position(), (0, 0));
+    }
+
+    #[test]
+    fn test_csi_auto_wrap_mode_toggle() {
+        let mut p = parser();
+        // Disable auto-wrap (DECAWM); writing past the last column must clamp
+        // the cursor rather than wrap to the next line.
+        p.process(b"\x1b[?7l");
+        p.process(b"0123456789ABC");
+        assert_eq!(p.buffer().cursor_position().1, 0);
+
+        // Re-enable auto-wrap; overflowing text now wraps to row 1.
+        let mut p2 = parser();
+        p2.process(b"\x1b[?7h");
+        p2.process(b"0123456789A");
+        assert_eq!(p2.buffer().cursor_position().1, 1);
+    }
+
+    #[test]
+    fn test_csi_insert_mode_toggle() {
+        let mut p = parser();
+        p.process(b"abcde\r");
+        // Enable insert mode (IRM, ANSI mode 4 without '?')
+        p.process(b"\x1b[4h");
+        p.process(b"X");
+        let buf = p.buffer();
+        assert_eq!(buf.get_cell(0, 0).unwrap().character, 'X');
+        assert_eq!(buf.get_cell(1, 0).unwrap().character, 'a');
+
+        // Disable insert mode; subsequent writes overwrite in place again.
+        p.process(b"\r\x1b[4l");
+        p.process(b"Y");
+        let buf = p.buffer();
+        assert_eq!(buf.get_cell(0, 0).unwrap().character, 'Y');
+        assert_eq!(buf.get_cell(1, 0).unwrap().character, 'a');
+    }
+
+    #[test]
+    fn test_csi_alternate_screen_1047() {
+        let mut p = parser();
+        p.process(b"main screen text");
+        p.process(b"\x1b[?1047h"); // switch to alternate
+        assert_eq!(p.buffer().get_cell(0, 0).unwrap().character, ' ');
+        p.process(b"alt");
+        p.process(b"\x1b[?1047l"); // switch back to main
+        assert_eq!(p.buffer().get_cell(0, 0).unwrap().character, 'm');
+    }
+
+    #[test]
+    fn test_csi_alternate_screen_1049_saves_and_restores_cursor() {
+        let mut p = parser();
+        p.process(b"\x1b[3;3H"); // (2, 2) on main screen
+        p.process(b"\x1b[?1049h"); // save cursor, switch to alt, clear
+        assert_eq!(p.buffer().cursor_position(), (0, 0));
+        p.process(b"\x1b[?1049l"); // switch back to main, restore cursor
+        assert_eq!(p.buffer().cursor_position(), (2, 2));
+    }
+
+    #[test]
+    fn test_csi_unknown_dec_private_mode_is_noop() {
+        let mut p = parser();
+        // Modes 1 and 25 are recognized-but-ignored; an entirely unknown one
+        // (e.g. 9999) must also be a no-op rather than panicking.
+        p.process(b"\x1b[?9999h");
+        p.process(b"A");
+        assert_eq!(p.buffer().get_cell(0, 0).unwrap().character, 'A');
+    }
+
+    #[test]
+    fn test_csi_sgr_reset_individual_attrs() {
+        let mut p = parser();
+        // Set every toggle-able attribute, then reset each one individually
+        // and verify it (and only it) clears.
+        p.process(b"\x1b[1;2;3;4;5;7;8;9m");
+        {
+            // SGR alone writes no character; the cell at (0,0) still exists
+            // (it's in-bounds) but should be untouched by the pending attrs.
+            let cell = p.buffer().get_cell(0, 0).unwrap();
+            assert_eq!(cell.character, ' ');
+            assert!(!cell.attrs.bold);
+        }
+        p.process(b"X\x1b[21;23;24;25;27;28;29mY");
+        let buf = p.buffer();
+        let set = buf.get_cell(0, 0).unwrap();
+        assert!(set.attrs.bold);
+        assert!(set.attrs.dim);
+        assert!(set.attrs.italic);
+        assert!(set.attrs.underline);
+        assert!(set.attrs.blink);
+        assert!(set.attrs.inverse);
+        assert!(set.attrs.hidden);
+        assert!(set.attrs.strikethrough);
+
+        let reset = buf.get_cell(1, 0).unwrap();
+        assert!(!reset.attrs.bold);
+        assert!(!reset.attrs.dim);
+        assert!(!reset.attrs.italic);
+        assert!(!reset.attrs.underline);
+        assert!(!reset.attrs.blink);
+        assert!(!reset.attrs.inverse);
+        assert!(!reset.attrs.hidden);
+        assert!(!reset.attrs.strikethrough);
+    }
+
+    #[test]
+    fn test_csi_sgr_256_color_low_and_gray_ranges() {
+        let mut p = parser();
+        // idx 3 falls in the 0..=7 basic-color passthrough range.
+        p.process(b"\x1b[38;5;3mA");
+        assert_eq!(p.buffer().get_cell(0, 0).unwrap().fg, ANSI_COLORS[3]);
+
+        // idx 250 falls in the 232..=255 grayscale ramp.
+        p.process(b"\x1b[38;5;250mB");
+        let gray = ((250u16 - 232) * 10 + 8) as u8;
+        assert_eq!(
+            p.buffer().get_cell(1, 0).unwrap().fg,
+            Color::rgb(gray, gray, gray)
+        );
+
+        // idx 10 falls in the 8..=15 bright-color range.
+        p.process(b"\x1b[38;5;10mC");
+        assert_eq!(p.buffer().get_cell(2, 0).unwrap().fg, ANSI_BRIGHT_COLORS[2]);
+    }
+
+    #[test]
+    fn test_csi_sgr_256_bg_color() {
+        let mut p = parser();
+        p.process(b"\x1b[48;5;196mA");
+        let idx = 196u16 - 16;
+        let r = ((idx / 36) * 51) as u8;
+        let g = (((idx / 6) % 6) * 51) as u8;
+        let b = ((idx % 6) * 51) as u8;
+        assert_eq!(p.buffer().get_cell(0, 0).unwrap().bg, Color::rgb(r, g, b));
+    }
+
+    #[test]
+    fn test_csi_sgr_rgb_truecolor_bg() {
+        let mut p = parser();
+        p.process(b"\x1b[48;2;1;2;3mA");
+        assert_eq!(p.buffer().get_cell(0, 0).unwrap().bg, Color::rgb(1, 2, 3));
+    }
+
+    #[test]
+    fn test_esc_save_restore_cursor_7_8() {
+        let mut p = parser();
+        p.process(b"\x1b[3;3H"); // (2, 2)
+        p.process(b"\x1b7"); // ESC 7 save
+        p.process(b"\x1b[1;1H");
+        p.process(b"\x1b8"); // ESC 8 restore
+        assert_eq!(p.buffer().cursor_position(), (2, 2));
+    }
+
+    #[test]
+    fn test_esc_scroll_up_down_d_m() {
+        let mut p = parser();
+        p.process(b"line1\r\nline2\r\nline3");
+        p.process(b"\x1bD"); // ESC D scrolls the buffer up by 1
+        assert_eq!(p.buffer().scrollback_len(), 1);
+
+        p.process(b"\x1bM"); // ESC M scrolls back down by 1
+        assert_eq!(p.buffer().get_row(0).unwrap()[0].character, ' ');
+    }
+
+    #[test]
+    fn test_esc_reset_terminal_c() {
+        let mut p = parser();
+        p.process(b"\x1b[1mhello");
+        p.process(b"\x1bc"); // ESC c full reset (RIS)
+        let buf = p.buffer();
+        assert_eq!(buf.cursor_position(), (0, 0));
+        assert_eq!(buf.get_cell(0, 0).unwrap().character, ' ');
+        assert!(!buf.current_attrs().bold);
+    }
+
+    #[test]
+    fn test_esc_unknown_sequence_is_noop() {
+        let mut p = parser();
+        p.process(b"A\x1bZB");
+        // Unrecognized ESC dispatch (no intermediates, byte 'Z') must not
+        // panic and must not disturb surrounding text.
+        assert_eq!(p.buffer().get_cell(0, 0).unwrap().character, 'A');
+        assert_eq!(p.buffer().get_cell(1, 0).unwrap().character, 'B');
     }
 }

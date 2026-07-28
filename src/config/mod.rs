@@ -96,3 +96,52 @@ pub enum CursorStyle {
     Beam,
     Underline,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_theme_mode_default_is_dark() {
+        assert_eq!(ThemeMode::default(), ThemeMode::Dark);
+    }
+
+    #[test]
+    fn test_theme_mode_display() {
+        assert_eq!(ThemeMode::Dark.to_string(), "Dark");
+        assert_eq!(ThemeMode::Light.to_string(), "Light");
+        assert_eq!(ThemeMode::System.to_string(), "System");
+    }
+
+    #[test]
+    fn test_cursor_style_default_is_block() {
+        assert_eq!(CursorStyle::default(), CursorStyle::Block);
+    }
+
+    #[test]
+    fn test_app_config_default_values() {
+        let cfg = AppConfig::default();
+        assert_eq!(cfg.theme_mode, ThemeMode::Dark);
+        assert_eq!(cfg.color_theme, "Dracula");
+        assert_eq!(cfg.font_size, 14.0);
+        assert_eq!(cfg.font_family, "JetBrains Mono");
+        assert_eq!(cfg.scrollback_lines, 10000);
+        assert!(cfg.cursor_blink);
+        assert_eq!(cfg.cursor_style, CursorStyle::Block);
+        assert!(cfg.bell_enabled);
+        assert!(cfg.auto_reconnect);
+        assert_eq!(cfg.default_port, 22);
+        assert_eq!(cfg.default_username, "");
+        assert_eq!(cfg.connection_timeout, 30);
+        assert_eq!(cfg.keepalive_interval, 60);
+    }
+
+    #[test]
+    fn test_app_config_serde_round_trip() {
+        let cfg = AppConfig::default();
+        let json = serde_json::to_string(&cfg).unwrap();
+        let restored: AppConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.color_theme, cfg.color_theme);
+        assert_eq!(restored.theme_mode, cfg.theme_mode);
+    }
+}

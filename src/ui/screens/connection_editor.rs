@@ -572,3 +572,303 @@ pub enum ConnectionEditorAction {
     Save(ConnectionProfile),
     Cancel,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a bare-bones connection profile for use as test fixture input.
+    fn sample_profile() -> ConnectionProfile {
+        ConnectionProfile {
+            id: "profile-1".to_string(),
+            name: "My Box".to_string(),
+            host: "host.example.com".to_string(),
+            port: 2222,
+            username: "alice".to_string(),
+            auth_type: ProfileAuthType::PublicKey,
+            group: Some("Production".to_string()),
+            last_connected: Some("2024-01-01".to_string()),
+            is_favorite: true,
+        }
+    }
+
+    #[test]
+    fn test_form_auth_method_display_password() {
+        assert_eq!(FormAuthMethod::Password.to_string(), "Password");
+    }
+
+    #[test]
+    fn test_form_auth_method_display_public_key() {
+        assert_eq!(FormAuthMethod::PublicKey.to_string(), "Public Key");
+    }
+
+    #[test]
+    fn test_form_auth_method_display_keyboard_interactive() {
+        assert_eq!(
+            FormAuthMethod::KeyboardInteractive.to_string(),
+            "Keyboard Interactive"
+        );
+    }
+
+    #[test]
+    fn test_form_auth_method_display_agent() {
+        assert_eq!(FormAuthMethod::Agent.to_string(), "SSH Agent");
+    }
+
+    #[test]
+    fn test_new_has_sane_defaults() {
+        let editor = ConnectionEditorScreen::new();
+        assert_eq!(editor.name, "");
+        assert_eq!(editor.host, "");
+        assert_eq!(editor.port, 22);
+        assert_eq!(editor.username, "root");
+        assert!(editor.auth_method == FormAuthMethod::Password);
+        assert!(!editor.save_password);
+        assert!(!editor.compression);
+        assert_eq!(editor.keepalive_interval, 30);
+        assert_eq!(editor.connection_timeout, 30);
+        assert!(editor.tcp_keepalive);
+        assert_eq!(editor.terminal_type, "xterm-256color");
+        assert_eq!(editor.encoding, "UTF-8");
+        assert!(editor.local_forwards.is_empty());
+        assert!(editor.remote_forwards.is_empty());
+        assert!(!editor.use_jump_host);
+        assert_eq!(editor.jump_port, 22);
+        assert!(editor.editing_id.is_none());
+        assert!(!editor.is_dirty);
+    }
+
+    #[test]
+    fn test_default_trait_matches_new() {
+        let editor = ConnectionEditorScreen::default();
+        assert_eq!(editor.port, 22);
+        assert_eq!(editor.username, "root");
+    }
+
+    #[test]
+    fn test_from_profile_copies_fields() {
+        let profile = sample_profile();
+        let editor = ConnectionEditorScreen::from_profile(&profile);
+        assert_eq!(editor.name, "My Box");
+        assert_eq!(editor.host, "host.example.com");
+        assert_eq!(editor.port, 2222);
+        assert_eq!(editor.username, "alice");
+        assert!(editor.auth_method == FormAuthMethod::PublicKey);
+        assert_eq!(editor.group, "Production");
+        assert!(editor.is_favorite);
+        assert_eq!(editor.editing_id, Some("profile-1".to_string()));
+    }
+
+    #[test]
+    fn test_from_profile_maps_password_auth_type() {
+        let mut profile = sample_profile();
+        profile.auth_type = ProfileAuthType::Password;
+        let editor = ConnectionEditorScreen::from_profile(&profile);
+        assert!(editor.auth_method == FormAuthMethod::Password);
+    }
+
+    #[test]
+    fn test_from_profile_maps_keyboard_interactive_auth_type() {
+        let mut profile = sample_profile();
+        profile.auth_type = ProfileAuthType::KeyboardInteractive;
+        let editor = ConnectionEditorScreen::from_profile(&profile);
+        assert!(editor.auth_method == FormAuthMethod::KeyboardInteractive);
+    }
+
+    #[test]
+    fn test_from_profile_with_no_group_defaults_to_empty_string() {
+        let mut profile = sample_profile();
+        profile.group = None;
+        let editor = ConnectionEditorScreen::from_profile(&profile);
+        assert_eq!(editor.group, "");
+    }
+
+    #[test]
+    fn test_to_profile_generates_uuid_when_no_editing_id() {
+        let editor = ConnectionEditorScreen::new();
+        let profile = editor.to_profile();
+        // Must be a valid UUID string (36 chars, hyphenated).
+        assert_eq!(profile.id.len(), 36);
+        assert!(uuid::Uuid::parse_str(&profile.id).is_ok());
+    }
+
+    #[test]
+    fn test_to_profile_preserves_editing_id() {
+        let mut editor = ConnectionEditorScreen::new();
+        editor.editing_id = Some("existing-id".to_string());
+        let profile = editor.to_profile();
+        assert_eq!(profile.id, "existing-id");
+    }
+
+    #[test]
+    fn test_to_profile_defaults_name_from_username_and_host_when_empty() {
+        let mut editor = ConnectionEditorScreen::new();
+        editor.name = String::new();
+        editor.username = "bob".to_string();
+        editor.host = "example.org".to_string();
+        let profile = editor.to_profile();
+        assert_eq!(profile.name, "bob@example.org");
+    }
+
+    #[test]
+    fn test_to_profile_keeps_explicit_name() {
+        let mut editor = ConnectionEditorScreen::new();
+        editor.name = "Custom Name".to_string();
+        editor.username = "bob".to_string();
+        editor.host = "example.org".to_string();
+        let profile = editor.to_profile();
+        assert_eq!(profile.name, "Custom Name");
+    }
+
+    #[test]
+    fn test_to_profile_maps_password_auth() {
+        let editor = ConnectionEditorScreen::new();
+        let profile = editor.to_profile();
+        assert!(matches!(profile.auth_type, ProfileAuthType::Password));
+    }
+
+    #[test]
+    fn test_to_profile_maps_public_key_auth() {
+        let mut editor = ConnectionEditorScreen::new();
+        editor.auth_method = FormAuthMethod::PublicKey;
+        let profile = editor.to_profile();
+        assert!(matches!(profile.auth_type, ProfileAuthType::PublicKey));
+    }
+
+    #[test]
+    fn test_to_profile_maps_keyboard_interactive_auth() {
+        let mut editor = ConnectionEditorScreen::new();
+        editor.auth_method = FormAuthMethod::KeyboardInteractive;
+        let profile = editor.to_profile();
+        assert!(matches!(
+            profile.auth_type,
+            ProfileAuthType::KeyboardInteractive
+        ));
+    }
+
+    #[test]
+    fn test_to_profile_maps_agent_auth_to_public_key() {
+        // SSH Agent auth is negotiated via the public key mechanism, so the
+        // saved profile should record it as PublicKey.
+        let mut editor = ConnectionEditorScreen::new();
+        editor.auth_method = FormAuthMethod::Agent;
+        let profile = editor.to_profile();
+        assert!(matches!(profile.auth_type, ProfileAuthType::PublicKey));
+    }
+
+    #[test]
+    fn test_to_profile_empty_group_becomes_none() {
+        let mut editor = ConnectionEditorScreen::new();
+        editor.group = String::new();
+        let profile = editor.to_profile();
+        assert_eq!(profile.group, None);
+    }
+
+    #[test]
+    fn test_to_profile_nonempty_group_becomes_some() {
+        let mut editor = ConnectionEditorScreen::new();
+        editor.group = "Staging".to_string();
+        let profile = editor.to_profile();
+        assert_eq!(profile.group, Some("Staging".to_string()));
+    }
+
+    #[test]
+    fn test_to_profile_last_connected_always_none() {
+        let editor = ConnectionEditorScreen::new();
+        let profile = editor.to_profile();
+        assert!(profile.last_connected.is_none());
+    }
+
+    #[test]
+    fn test_to_profile_unicode_fields_roundtrip() {
+        let mut editor = ConnectionEditorScreen::new();
+        editor.name = String::new();
+        editor.username = "üsér".to_string();
+        editor.host = "hôst.example".to_string();
+        let profile = editor.to_profile();
+        assert_eq!(profile.name, "üsér@hôst.example");
+    }
+
+    /// Render the editor form inside a headless egui context and make sure
+    /// it does not panic for a given screen state.
+    fn render_smoke(editor: &mut ConnectionEditorScreen) {
+        let ctx = egui::Context::default();
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            editor.render(ui);
+        });
+    }
+
+    #[test]
+    fn test_render_new_connection_smoke() {
+        let mut editor = ConnectionEditorScreen::new();
+        render_smoke(&mut editor);
+        assert!(editor.editing_id.is_none());
+    }
+
+    #[test]
+    fn test_render_edit_existing_connection_smoke() {
+        let profile = sample_profile();
+        let mut editor = ConnectionEditorScreen::from_profile(&profile);
+        render_smoke(&mut editor);
+        assert!(editor.editing_id.is_some());
+    }
+
+    #[test]
+    fn test_render_public_key_auth_method_smoke() {
+        let mut editor = ConnectionEditorScreen::new();
+        editor.auth_method = FormAuthMethod::PublicKey;
+        render_smoke(&mut editor);
+    }
+
+    #[test]
+    fn test_render_keyboard_interactive_auth_method_smoke() {
+        let mut editor = ConnectionEditorScreen::new();
+        editor.auth_method = FormAuthMethod::KeyboardInteractive;
+        render_smoke(&mut editor);
+    }
+
+    #[test]
+    fn test_render_agent_auth_method_smoke() {
+        let mut editor = ConnectionEditorScreen::new();
+        editor.auth_method = FormAuthMethod::Agent;
+        render_smoke(&mut editor);
+    }
+
+    #[test]
+    fn test_render_with_jump_host_enabled_smoke() {
+        let mut editor = ConnectionEditorScreen::new();
+        editor.use_jump_host = true;
+        editor.jump_host = "bastion.example.com".to_string();
+        editor.jump_username = "jumpuser".to_string();
+        render_smoke(&mut editor);
+    }
+
+    #[test]
+    fn test_render_with_port_forwards_populated_smoke() {
+        let mut editor = ConnectionEditorScreen::new();
+        editor.local_forwards.push(PortForward {
+            local_port: 8080,
+            remote_host: "localhost".to_string(),
+            remote_port: 80,
+            enabled: true,
+        });
+        editor.remote_forwards.push(PortForward {
+            local_port: 9090,
+            remote_host: "internal.example.com".to_string(),
+            remote_port: 443,
+            enabled: false,
+        });
+        render_smoke(&mut editor);
+        assert_eq!(editor.local_forwards.len(), 1);
+        assert_eq!(editor.remote_forwards.len(), 1);
+    }
+
+    #[test]
+    fn test_render_with_unicode_and_long_strings_smoke() {
+        let mut editor = ConnectionEditorScreen::new();
+        editor.name = "サーバー".to_string();
+        editor.host = "例え.テスト".repeat(20);
+        editor.notes = "notes ".repeat(200);
+        render_smoke(&mut editor);
+    }
+}

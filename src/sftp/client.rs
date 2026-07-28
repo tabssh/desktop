@@ -340,3 +340,322 @@ pub fn format_permissions(mode: u32) -> String {
         .map(|(has_perm, ch)| if *has_perm { *ch } else { '-' })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- format_file_size --------------------------------------------------
+
+    #[test]
+    fn test_format_file_size_zero_bytes() {
+        assert_eq!(format_file_size(0), "0 B");
+    }
+
+    #[test]
+    fn test_format_file_size_bytes_stay_bytes() {
+        assert_eq!(format_file_size(512), "512 B");
+    }
+
+    #[test]
+    fn test_format_file_size_exact_kb_boundary() {
+        assert_eq!(format_file_size(1024), "1.00 KB");
+    }
+
+    #[test]
+    fn test_format_file_size_just_below_kb_boundary() {
+        assert_eq!(format_file_size(1023), "1023 B");
+    }
+
+    #[test]
+    fn test_format_file_size_mb() {
+        assert_eq!(format_file_size(5 * 1024 * 1024), "5.00 MB");
+    }
+
+    #[test]
+    fn test_format_file_size_caps_at_largest_unit() {
+        // u64::MAX is far beyond TB but the unit table must not overrun.
+        let result = format_file_size(u64::MAX);
+        assert!(result.ends_with(" TB"));
+    }
+
+    // -- format_permissions --------------------------------------------------
+
+    #[test]
+    fn test_format_permissions_zero_mode() {
+        assert_eq!(format_permissions(0), "---------");
+    }
+
+    #[test]
+    fn test_format_permissions_full_mode() {
+        assert_eq!(format_permissions(0o777), "rwxrwxrwx");
+    }
+
+    #[test]
+    fn test_format_permissions_common_mode_644() {
+        assert_eq!(format_permissions(0o644), "rw-r--r--");
+    }
+
+    #[test]
+    fn test_format_permissions_common_mode_755() {
+        assert_eq!(format_permissions(0o755), "rwxr-xr-x");
+    }
+
+    #[test]
+    fn test_format_permissions_ignores_bits_above_mode() {
+        // Extra high bits (e.g. setuid/setgid/sticky or file-type bits)
+        // must not leak into the rwx string.
+        assert_eq!(format_permissions(0o100644), "rw-r--r--");
+    }
+
+    // -- file_entry_from -----------------------------------------------------
+
+    #[test]
+    fn test_file_entry_from_directory() {
+        let mut attrs = FileAttributes::default();
+        attrs.set_dir(true);
+        attrs.size = Some(0);
+
+        let entry = file_entry_from(Path::new("/home"), "sub".to_string(), &attrs);
+
+        assert_eq!(entry.name, "sub");
+        assert_eq!(entry.path, PathBuf::from("/home/sub"));
+        assert_eq!(entry.file_type, FileType::Directory);
+        assert_eq!(entry.size, 0);
+    }
+
+    #[test]
+    fn test_file_entry_from_regular_file() {
+        // FileAttributes::default() flags a directory (DIR bit + 0o777)
+        // by default, so permissions must be reset to 0 first, or the
+        // leftover DIR bit would make is_dir() win over is_regular() in
+        // file_entry_from's type-detection order. The permissions field
+        // packs the file-type bits and the mode together (as real SFTP
+        // servers do), so the expected value includes the REG bit.
+        let mut attrs = FileAttributes {
+            permissions: Some(0),
+            ..FileAttributes::default()
+        };
+        attrs.set_regular(true);
+        attrs.permissions = attrs.permissions.map(|p| p | 0o644);
+        attrs.size = Some(1234);
+        attrs.user = Some("alice".to_string());
+        attrs.group = Some("staff".to_string());
+
+        let entry = file_entry_from(Path::new("/data"), "report.txt".to_string(), &attrs);
+
+        assert_eq!(entry.file_type, FileType::File);
+        assert_eq!(entry.size, 1234);
+        assert_eq!(entry.permissions, 0o100644);
+        assert_eq!(entry.owner, "alice");
+        assert_eq!(entry.group, "staff");
+    }
+
+    #[test]
+    fn test_file_entry_from_symlink() {
+        // Reset permissions to 0 first: FileAttributes::default() sets the
+        // directory type bit, which would otherwise take priority over the
+        // symlink bit in file_entry_from's type-detection order.
+        let mut attrs = FileAttributes {
+            permissions: Some(0),
+            ..FileAttributes::default()
+        };
+        attrs.set_symlink(true);
+
+        let entry = file_entry_from(Path::new("/data"), "link".to_string(), &attrs);
+        assert_eq!(entry.file_type, FileType::Symlink);
+    }
+
+    #[test]
+    fn test_file_entry_from_other_type() {
+        // No type bit set at all (not dir/regular/symlink) must fall back
+        // to FileType::Other rather than panicking or misclassifying.
+        // FileAttributes::default() sets the directory bit, so permissions
+        // must be explicitly cleared to represent an untyped entry.
+        let attrs = FileAttributes {
+            permissions: Some(0),
+            ..FileAttributes::default()
+        };
+        let entry = file_entry_from(Path::new("/dev"), "null".to_string(), &attrs);
+        assert_eq!(entry.file_type, FileType::Other);
+    }
+
+    #[test]
+    fn test_file_entry_from_missing_optional_fields_default_to_zero_or_empty() {
+        // FileAttributes::default() sets size/permissions/mtime to non-zero
+        // defaults (a directory with 0o777 perms and an epoch mtime), so
+        // they must be explicitly overridden to exercise the true
+        // missing/zero-value fallback paths in file_entry_from.
+        let attrs = FileAttributes {
+            size: Some(0),
+            permissions: Some(0),
+            mtime: None,
+            ..FileAttributes::default()
+        };
+        let entry = file_entry_from(Path::new("/"), "x".to_string(), &attrs);
+        assert_eq!(entry.size, 0);
+        assert_eq!(entry.permissions, 0);
+        assert_eq!(entry.owner, "");
+        assert_eq!(entry.group, "");
+        assert!(entry.modified.is_none());
+    }
+
+    #[test]
+    fn test_file_entry_from_unicode_name() {
+        let attrs = FileAttributes::default();
+        let entry = file_entry_from(Path::new("/home"), "写真.png".to_string(), &attrs);
+        assert_eq!(entry.name, "写真.png");
+        assert_eq!(entry.path, PathBuf::from("/home/写真.png"));
+    }
+
+    #[test]
+    fn test_file_entry_from_empty_name() {
+        let attrs = FileAttributes::default();
+        let entry = file_entry_from(Path::new("/home"), String::new(), &attrs);
+        assert_eq!(entry.name, "");
+        assert_eq!(entry.path, PathBuf::from("/home"));
+    }
+
+    #[test]
+    fn test_file_entry_from_mtime_conversion() {
+        let attrs = FileAttributes {
+            mtime: Some(0),
+            ..Default::default()
+        };
+        let entry = file_entry_from(Path::new("/"), "x".to_string(), &attrs);
+        assert_eq!(entry.modified, chrono::DateTime::from_timestamp(0, 0));
+    }
+
+    // -- SftpClient ------------------------------------------------------------
+
+    #[test]
+    fn test_new_client_starts_at_root_with_no_session() {
+        let client = SftpClient::new("session-1".to_string());
+        assert_eq!(client.current_path(), Path::new("/"));
+        assert!(client.sftp().is_err());
+    }
+
+    #[test]
+    fn test_change_directory_updates_current_path() {
+        let mut client = SftpClient::new("session-1".to_string());
+        client.change_directory(PathBuf::from("/home/user"));
+        assert_eq!(client.current_path(), Path::new("/home/user"));
+    }
+
+    #[test]
+    fn test_change_directory_to_empty_path() {
+        let mut client = SftpClient::new("session-1".to_string());
+        client.change_directory(PathBuf::new());
+        assert_eq!(client.current_path(), Path::new(""));
+    }
+
+    #[test]
+    fn test_sftp_not_connected_error_message() {
+        let client = SftpClient::new("session-1".to_string());
+        let err = match client.sftp() {
+            Err(e) => e,
+            Ok(_) => panic!("expected sftp() to return an error"),
+        };
+        assert_eq!(err.to_string(), "SFTP not connected");
+    }
+
+    // -- TransferTask ------------------------------------------------------------
+
+    #[test]
+    fn test_transfer_task_construction() {
+        let task = TransferTask {
+            id: uuid::Uuid::nil(),
+            local_path: PathBuf::from("/local/file"),
+            remote_path: PathBuf::from("/remote/file"),
+            direction: TransferDirection::Upload,
+            total_bytes: 100,
+            transferred_bytes: 0,
+            state: TransferState::Pending,
+        };
+        assert_eq!(task.direction, TransferDirection::Upload);
+        assert_eq!(task.state, TransferState::Pending);
+        assert_eq!(task.total_bytes, 100);
+        assert_eq!(task.transferred_bytes, 0);
+    }
+
+    // -- local filesystem helpers (local disk only, no network) -----------------
+
+    #[test]
+    fn test_create_and_read_local_directory() {
+        let dir = std::env::temp_dir().join(format!("tabssh_test_sftp_{}", uuid::Uuid::new_v4()));
+        create_local_directory(&dir).unwrap();
+        std::fs::write(dir.join("a.txt"), b"hello").unwrap();
+        create_local_directory(&dir.join("subdir")).unwrap();
+
+        let entries = read_local_directory(&dir).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+
+        assert_eq!(entries.len(), 2);
+        let file_entry = entries.iter().find(|e| e.name == "a.txt").unwrap();
+        assert_eq!(file_entry.file_type, FileType::File);
+        assert_eq!(file_entry.size, 5);
+        let dir_entry = entries.iter().find(|e| e.name == "subdir").unwrap();
+        assert_eq!(dir_entry.file_type, FileType::Directory);
+    }
+
+    #[test]
+    fn test_read_local_directory_empty() {
+        let dir =
+            std::env::temp_dir().join(format!("tabssh_test_sftp_empty_{}", uuid::Uuid::new_v4()));
+        create_local_directory(&dir).unwrap();
+
+        let entries = read_local_directory(&dir).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn test_read_local_directory_missing_path_errors() {
+        let dir =
+            std::env::temp_dir().join(format!("tabssh_test_sftp_missing_{}", uuid::Uuid::new_v4()));
+        assert!(read_local_directory(&dir).is_err());
+    }
+
+    #[test]
+    fn test_create_local_directory_is_idempotent() {
+        let dir =
+            std::env::temp_dir().join(format!("tabssh_test_sftp_mkdir_{}", uuid::Uuid::new_v4()));
+        create_local_directory(&dir).unwrap();
+        // Creating it again must not error (create_dir_all semantics).
+        create_local_directory(&dir).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_delete_local_path_removes_file() {
+        let dir =
+            std::env::temp_dir().join(format!("tabssh_test_sftp_del_{}", uuid::Uuid::new_v4()));
+        create_local_directory(&dir).unwrap();
+        let file = dir.join("f.txt");
+        std::fs::write(&file, b"data").unwrap();
+
+        delete_local_path(&file).unwrap();
+        assert!(!file.exists());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_delete_local_path_removes_directory_recursively() {
+        let dir =
+            std::env::temp_dir().join(format!("tabssh_test_sftp_deldir_{}", uuid::Uuid::new_v4()));
+        create_local_directory(&dir.join("nested")).unwrap();
+        std::fs::write(dir.join("nested").join("f.txt"), b"data").unwrap();
+
+        delete_local_path(&dir).unwrap();
+        assert!(!dir.exists());
+    }
+
+    #[test]
+    fn test_delete_local_path_missing_path_errors() {
+        let path =
+            std::env::temp_dir().join(format!("tabssh_test_sftp_nope_{}", uuid::Uuid::new_v4()));
+        assert!(delete_local_path(&path).is_err());
+    }
+}

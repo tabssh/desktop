@@ -82,3 +82,126 @@ impl ConnectionConfig {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_auth_type_equality() {
+        assert_eq!(AuthType::Password, AuthType::Password);
+        assert_eq!(AuthType::PublicKey, AuthType::PublicKey);
+        assert_eq!(AuthType::KeyboardInteractive, AuthType::KeyboardInteractive);
+        assert_ne!(AuthType::Password, AuthType::PublicKey);
+        assert_ne!(AuthType::PublicKey, AuthType::KeyboardInteractive);
+    }
+
+    #[test]
+    fn test_connection_config_default() {
+        let config = ConnectionConfig::default();
+        assert_eq!(config.host, "");
+        assert_eq!(config.port, 22);
+        assert_eq!(config.username, "");
+        assert_eq!(config.auth_type, AuthType::Password);
+        assert_eq!(config.timeout, 30);
+        assert_eq!(config.keepalive, 60);
+        assert!(!config.compression);
+    }
+
+    #[test]
+    fn test_connection_config_new_uses_defaults_for_rest() {
+        let config = ConnectionConfig::new("example.com", "alice");
+        assert_eq!(config.host, "example.com");
+        assert_eq!(config.username, "alice");
+        assert_eq!(config.port, 22);
+        assert_eq!(config.auth_type, AuthType::Password);
+        assert_eq!(config.timeout, 30);
+        assert_eq!(config.keepalive, 60);
+        assert!(!config.compression);
+    }
+
+    #[test]
+    fn test_connection_config_new_accepts_owned_and_borrowed_strings() {
+        let owned = ConnectionConfig::new("host".to_string(), "user".to_string());
+        assert_eq!(owned.host, "host");
+        assert_eq!(owned.username, "user");
+
+        let borrowed = ConnectionConfig::new("host", "user");
+        assert_eq!(borrowed.host, "host");
+        assert_eq!(borrowed.username, "user");
+    }
+
+    #[test]
+    fn test_with_port() {
+        let config = ConnectionConfig::new("h", "u").with_port(2222);
+        assert_eq!(config.port, 2222);
+    }
+
+    #[test]
+    fn test_with_port_zero_boundary() {
+        let config = ConnectionConfig::new("h", "u").with_port(0);
+        assert_eq!(config.port, 0);
+    }
+
+    #[test]
+    fn test_with_auth() {
+        let config = ConnectionConfig::new("h", "u").with_auth(AuthType::PublicKey);
+        assert_eq!(config.auth_type, AuthType::PublicKey);
+
+        let config = config.with_auth(AuthType::KeyboardInteractive);
+        assert_eq!(config.auth_type, AuthType::KeyboardInteractive);
+    }
+
+    #[test]
+    fn test_with_timeout() {
+        let config = ConnectionConfig::new("h", "u").with_timeout(120);
+        assert_eq!(config.timeout, 120);
+    }
+
+    #[test]
+    fn test_with_timeout_zero_boundary() {
+        let config = ConnectionConfig::new("h", "u").with_timeout(0);
+        assert_eq!(config.timeout, 0);
+    }
+
+    #[test]
+    fn test_with_keepalive() {
+        let config = ConnectionConfig::new("h", "u").with_keepalive(15);
+        assert_eq!(config.keepalive, 15);
+    }
+
+    #[test]
+    fn test_with_compression() {
+        let config = ConnectionConfig::new("h", "u").with_compression(true);
+        assert!(config.compression);
+
+        let config = config.with_compression(false);
+        assert!(!config.compression);
+    }
+
+    #[test]
+    fn test_builder_chaining_sets_all_fields() {
+        let config = ConnectionConfig::new("host.example", "bob")
+            .with_port(2200)
+            .with_auth(AuthType::PublicKey)
+            .with_timeout(45)
+            .with_keepalive(20)
+            .with_compression(true);
+
+        assert_eq!(config.host, "host.example");
+        assert_eq!(config.username, "bob");
+        assert_eq!(config.port, 2200);
+        assert_eq!(config.auth_type, AuthType::PublicKey);
+        assert_eq!(config.timeout, 45);
+        assert_eq!(config.keepalive, 20);
+        assert!(config.compression);
+    }
+
+    #[test]
+    fn test_connection_config_clone_is_independent() {
+        let original = ConnectionConfig::new("h", "u").with_port(2222);
+        let cloned = original.clone();
+        assert_eq!(cloned.host, original.host);
+        assert_eq!(cloned.port, original.port);
+    }
+}

@@ -179,3 +179,120 @@ impl Default for SftpBrowserScreen {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sftp::FileType;
+    use chrono::Utc;
+
+    fn make_entry(
+        name: &str,
+        file_type: FileType,
+        size: u64,
+        has_modified: bool,
+    ) -> crate::sftp::FileEntry {
+        crate::sftp::FileEntry {
+            name: name.to_string(),
+            path: PathBuf::from(name),
+            file_type,
+            size,
+            permissions: 0o644,
+            modified: if has_modified { Some(Utc::now()) } else { None },
+            owner: String::new(),
+            group: String::new(),
+        }
+    }
+
+    /// Render the screen inside a headless egui context/frame and return
+    /// nothing; panics propagate as normal test failures.
+    fn render_smoke(screen: &mut SftpBrowserScreen) {
+        let ctx = egui::Context::default();
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            screen.render(&ctx, ui);
+        });
+    }
+
+    #[test]
+    fn test_new_has_expected_defaults() {
+        let screen = SftpBrowserScreen::new();
+        assert_eq!(screen.current_path_input, "/");
+        assert!(screen.selected_local_path.is_none());
+        assert!(screen.transfer_progress.is_empty());
+    }
+
+    #[test]
+    fn test_default_matches_new() {
+        let screen = SftpBrowserScreen::default();
+        assert_eq!(screen.current_path_input, "/");
+        assert!(screen.transfer_progress.is_empty());
+    }
+
+    #[test]
+    fn test_render_smoke_empty_directory() {
+        let mut screen = SftpBrowserScreen::new();
+        render_smoke(&mut screen);
+    }
+
+    #[test]
+    fn test_render_smoke_with_mixed_entry_types() {
+        let mut screen = SftpBrowserScreen::new();
+        screen.browser.set_entries(vec![
+            make_entry("dir1", FileType::Directory, 0, true),
+            make_entry("file1.txt", FileType::File, 1234, true),
+            make_entry("link1", FileType::Symlink, 0, false),
+            make_entry("other1", FileType::Other, 0, true),
+        ]);
+        screen.browser.toggle_selection(1);
+        render_smoke(&mut screen);
+    }
+
+    #[test]
+    fn test_render_smoke_with_transfer_progress() {
+        let mut screen = SftpBrowserScreen::new();
+        screen.transfer_progress.push(TransferProgress {
+            filename: "big_file.bin".to_string(),
+            progress: 0.5,
+            status: "Uploading".to_string(),
+        });
+        render_smoke(&mut screen);
+    }
+
+    #[test]
+    fn test_render_smoke_with_boundary_progress_values() {
+        let mut screen = SftpBrowserScreen::new();
+        screen.transfer_progress.push(TransferProgress {
+            filename: String::new(),
+            progress: 0.0,
+            status: String::new(),
+        });
+        screen.transfer_progress.push(TransferProgress {
+            filename: "done.bin".to_string(),
+            progress: 1.0,
+            status: "Complete".to_string(),
+        });
+        render_smoke(&mut screen);
+    }
+
+    #[test]
+    fn test_render_smoke_with_long_and_unicode_names() {
+        let mut screen = SftpBrowserScreen::new();
+        screen.browser.set_entries(vec![
+            make_entry(&"a".repeat(300), FileType::File, u64::MAX, true),
+            make_entry("файл-名前-🎉.txt", FileType::File, 0, false),
+        ]);
+        render_smoke(&mut screen);
+    }
+
+    #[test]
+    fn test_render_smoke_with_all_selected() {
+        let mut screen = SftpBrowserScreen::new();
+        screen.browser.set_entries(vec![
+            make_entry("a", FileType::File, 1, true),
+            make_entry("b", FileType::File, 2, true),
+        ]);
+        screen.browser.select_all();
+        assert_eq!(screen.browser.get_selected_entries().len(), 2);
+        render_smoke(&mut screen);
+    }
+}

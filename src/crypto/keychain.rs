@@ -105,3 +105,27 @@ impl Default for KeychainManager {
         Self::new()
     }
 }
+
+// `KeychainManager` is a zero-sized marker type; every method
+// (`store_password`/`get_password`/`delete_password`) is a thin,
+// platform-gated wrapper that talks directly to a real OS keychain
+// (macOS Keychain via `security-framework`, or `keyring`'s backend on
+// Linux/Windows/other). There is no pure logic in those methods to unit
+// test without a real OS keychain/D-Bus secret service present, and
+// exercising them here would make the suite flaky/non-hermetic in CI
+// containers that lack one. Only the trivial, environment-independent
+// constructors are covered below.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_constructs() {
+        let _manager = KeychainManager::new();
+    }
+
+    #[test]
+    fn test_default_constructs() {
+        let _manager = KeychainManager;
+    }
+}

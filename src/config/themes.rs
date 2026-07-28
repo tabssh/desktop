@@ -185,4 +185,95 @@ mod tests {
         assert!(!manager.list_themes().is_empty());
         assert!(manager.current_theme().is_some());
     }
+
+    #[test]
+    fn test_parse_color_boundary_cases() {
+        // Too short / too long hex strings are rejected.
+        assert_eq!(Theme::parse_color("#fff"), None);
+        assert_eq!(Theme::parse_color("#ff00000"), None);
+        // Empty string.
+        assert_eq!(Theme::parse_color(""), None);
+        // No leading '#' still parses (only stripped if present).
+        assert_eq!(Theme::parse_color("00ff00"), Some((0, 255, 0)));
+        // Mixed-case hex digits.
+        assert_eq!(Theme::parse_color("#AaBbCc"), Some((170, 187, 204)));
+        // Non-hex characters fail to parse.
+        assert_eq!(Theme::parse_color("#zzzzzz"), None);
+    }
+
+    #[test]
+    fn test_default_dark_fields() {
+        let theme = Theme::default_dark();
+        assert_eq!(theme.name, "Default Dark");
+        assert_eq!(theme.background, "#1e1e1e");
+        assert_eq!(theme.foreground, "#d4d4d4");
+    }
+
+    #[test]
+    fn test_save_and_load_from_file_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("custom-theme.json");
+
+        let theme = Theme::default_dark();
+        theme.save_to_file(&path).unwrap();
+
+        let loaded = Theme::load_from_file(&path).unwrap();
+        assert_eq!(loaded.name, theme.name);
+        assert_eq!(loaded.background, theme.background);
+        assert_eq!(loaded.bright_white, theme.bright_white);
+    }
+
+    #[test]
+    fn test_load_from_file_missing_path_errors() {
+        let result = Theme::load_from_file("/nonexistent/path/does-not-exist.json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_from_file_invalid_json_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bad-theme.json");
+        std::fs::write(&path, "not valid json").unwrap();
+
+        let result = Theme::load_from_file(&path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_theme_found_and_missing() {
+        let manager = ThemeManager::new();
+        assert!(manager.get_theme("Default Dark").is_some());
+        assert!(manager.get_theme("Does Not Exist").is_none());
+    }
+
+    #[test]
+    fn test_set_current_theme_valid_and_invalid() {
+        let mut manager = ThemeManager::new();
+
+        // Setting an unknown theme name is a no-op — current theme stays.
+        manager.set_current_theme("Nonexistent Theme".to_string());
+        assert_eq!(manager.current_theme().unwrap().name, "Default Dark");
+
+        manager.add_custom_theme(Theme {
+            name: "My Custom".to_string(),
+            ..Theme::default_dark()
+        });
+        manager.set_current_theme("My Custom".to_string());
+        assert_eq!(manager.current_theme().unwrap().name, "My Custom");
+    }
+
+    #[test]
+    fn test_add_custom_theme_appears_in_list() {
+        let mut manager = ThemeManager::new();
+        let before = manager.list_themes().len();
+
+        manager.add_custom_theme(Theme {
+            name: "Sunset".to_string(),
+            ..Theme::default_dark()
+        });
+
+        let after = manager.list_themes();
+        assert_eq!(after.len(), before + 1);
+        assert!(after.contains(&"Sunset".to_string()));
+    }
 }

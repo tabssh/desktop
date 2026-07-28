@@ -471,7 +471,7 @@ impl TerminalBuffer {
         self.cursor_x = self.cursor_x.min(new_cols.saturating_sub(1));
         self.cursor_y = self.cursor_y.min(new_rows.saturating_sub(1));
 
-        self.scroll_bottom = new_rows - 1;
+        self.scroll_bottom = new_rows.saturating_sub(1);
         if self.scroll_top >= new_rows {
             self.scroll_top = 0;
         }
@@ -504,5 +504,462 @@ impl TerminalBuffer {
 impl Default for TerminalBuffer {
     fn default() -> Self {
         Self::new(80, 24, 10000)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn buf(cols: u16, rows: u16, scrollback: usize) -> TerminalBuffer {
+        TerminalBuffer::new(cols, rows, scrollback)
+    }
+
+    #[test]
+    fn test_write_char_sets_cell_contents_and_advances_cursor() {
+        let mut b = buf(10, 5, 10);
+        b.write_char('a');
+        assert_eq!(b.get_cell(0, 0).unwrap().character, 'a');
+        assert_eq!(b.cursor_position(), (1, 0));
+    }
+
+    #[test]
+    fn test_write_str_writes_all_chars() {
+        let mut b = buf(10, 5, 10);
+        b.write_str("abc");
+        assert_eq!(b.get_cell(0, 0).unwrap().character, 'a');
+        assert_eq!(b.get_cell(1, 0).unwrap().character, 'b');
+        assert_eq!(b.get_cell(2, 0).unwrap().character, 'c');
+        assert_eq!(b.cursor_position(), (3, 0));
+    }
+
+    #[test]
+    fn test_write_char_records_current_colors_and_attrs() {
+        let mut b = buf(10, 5, 10);
+        b.set_fg(Color::RED);
+        b.set_bg(Color::BLUE);
+        let attrs = CellAttributes {
+            bold: true,
+            ..Default::default()
+        };
+        b.set_attr(attrs);
+        b.write_char('x');
+        let cell = b.get_cell(0, 0).unwrap();
+        assert_eq!(cell.fg, Color::RED);
+        assert_eq!(cell.bg, Color::BLUE);
+        assert!(cell.attrs.bold);
+    }
+
+    #[test]
+    fn test_line_wrap_at_right_edge() {
+        let mut b = buf(3, 3, 10);
+        b.write_str("abcd");
+        // "abc" fills row 0, 'd' wraps onto row 1
+        assert_eq!(b.get_cell(0, 0).unwrap().character, 'a');
+        assert_eq!(b.get_cell(1, 0).unwrap().character, 'b');
+        assert_eq!(b.get_cell(2, 0).unwrap().character, 'c');
+        assert_eq!(b.get_cell(0, 1).unwrap().character, 'd');
+        assert_eq!(b.cursor_position(), (1, 1));
+    }
+
+    #[test]
+    fn test_no_wrap_when_auto_wrap_disabled() {
+        let mut b = buf(3, 3, 10);
+        b.set_auto_wrap(false);
+        b.write_str("abcd");
+        // Without auto-wrap, cursor clamps at last column and overwrites it.
+        assert_eq!(b.get_cell(0, 0).unwrap().character, 'a');
+        assert_eq!(b.get_cell(1, 0).unwrap().character, 'b');
+        assert_eq!(b.get_cell(2, 0).unwrap().character, 'd');
+        assert_eq!(b.cursor_position(), (3, 0));
+    }
+
+    #[test]
+    fn test_newline_scrolls_when_at_bottom_of_screen() {
+        let mut b = buf(5, 2, 10);
+        b.write_str("row1");
+        b.write_char('\r');
+        b.write_char('\n');
+        b.write_str("row2");
+        b.write_char('\r');
+        b.write_char('\n');
+        b.write_str("row3");
+
+        // "row1" should have scrolled off into scrollback, "row2"/"row3" remain.
+        assert_eq!(b.scrollback_len(), 1);
+        let row_text = |row: &[Cell]| row.iter().take(4).map(|c| c.character).collect::<String>();
+        assert_eq!(row_text(b.get_scrollback_row(0).unwrap()), "row1");
+        assert_eq!(row_text(b.get_row(0).unwrap()), "row2");
+        assert_eq!(row_text(b.get_row(1).unwrap()), "row3");
+    }
+
+    #[test]
+    fn test_scrollback_max_limit_enforced() {
+        let mut b = buf(5, 1, 2);
+        for i in 0..5 {
+            b.write_char(char::from(b'a' + i as u8));
+            b.write_char('\n');
+        }
+        assert!(b.scrollback_len() <= 2);
+    }
+
+    #[test]
+    fn test_scroll_up_moves_top_row_to_scrollback() {
+        let mut b = buf(3, 3, 10);
+        b.get_row(0); // sanity access
+                      // seed rows with distinct content via direct writes at each row
+        b.set_cursor(0, 0);
+        b.write_str("AAA");
+        b.set_cursor(0, 1);
+        b.write_str("BBB");
+        b.set_cursor(0, 2);
+        b.write_str("CCC");
+
+        b.scroll_up(1);
+
+        assert_eq!(b.scrollback_len(), 1);
+        assert_eq!(b.get_scrollback_row(0).unwrap()[0].character, 'A');
+        assert_eq!(b.get_row(0).unwrap()[0].character, 'B');
+        assert_eq!(b.get_row(1).unwrap()[0].character, 'C');
+        // bottom row is now blank
+        assert_eq!(b.get_row(2).unwrap()[0].character, ' ');
+    }
+
+    #[test]
+    fn test_scroll_down_shifts_rows_and_blanks_top() {
+        let mut b = buf(3, 3, 10);
+        b.set_cursor(0, 0);
+        b.write_str("AAA");
+        b.set_cursor(0, 1);
+        b.write_str("BBB");
+        b.set_cursor(0, 2);
+        b.write_str("CCC");
+
+        b.scroll_down(1);
+
+        assert_eq!(b.get_row(0).unwrap()[0].character, ' ');
+        assert_eq!(b.get_row(1).unwrap()[0].character, 'A');
+        assert_eq!(b.get_row(2).unwrap()[0].character, 'B');
+    }
+
+    #[test]
+    fn test_resize_grow_preserves_content() {
+        let mut b = buf(3, 2, 10);
+        b.write_str("ab");
+        b.resize(6, 4);
+        assert_eq!(b.size().cols, 6);
+        assert_eq!(b.size().rows, 4);
+        assert_eq!(b.get_cell(0, 0).unwrap().character, 'a');
+        assert_eq!(b.get_cell(1, 0).unwrap().character, 'b');
+        // newly added cells are blank
+        assert_eq!(b.get_cell(5, 3).unwrap().character, ' ');
+    }
+
+    #[test]
+    fn test_resize_shrink_truncates_content_and_clamps_cursor() {
+        let mut b = buf(5, 5, 10);
+        b.set_cursor(4, 4);
+        b.write_str("hello");
+        b.resize(2, 2);
+        assert_eq!(b.size().cols, 2);
+        assert_eq!(b.size().rows, 2);
+        let (x, y) = b.cursor_position();
+        assert!(x < 2);
+        assert!(y < 2);
+        // no panic accessing within bounds
+        assert!(b.get_cell(0, 0).is_some());
+        assert!(b.get_cell(2, 0).is_none());
+    }
+
+    #[test]
+    fn test_resize_to_1x1_does_not_panic() {
+        let mut b = buf(10, 10, 10);
+        b.set_cursor(9, 9);
+        b.resize(1, 1);
+        assert_eq!(b.size().cols, 1);
+        assert_eq!(b.size().rows, 1);
+        assert_eq!(b.cursor_position(), (0, 0));
+        assert!(b.get_cell(0, 0).is_some());
+    }
+
+    #[test]
+    fn test_resize_to_zero_does_not_panic() {
+        let mut b = buf(10, 10, 10);
+        b.resize(0, 0);
+        assert_eq!(b.size().cols, 0);
+        assert_eq!(b.size().rows, 0);
+        assert_eq!(b.cursor_position(), (0, 0));
+        assert!(b.get_cell(0, 0).is_none());
+        assert!(b.get_row(0).is_none());
+    }
+
+    #[test]
+    fn test_cursor_clamped_within_bounds_via_set_cursor() {
+        let mut b = buf(5, 5, 10);
+        b.set_cursor(100, 100);
+        assert_eq!(b.cursor_position(), (4, 4));
+    }
+
+    #[test]
+    fn test_move_cursor_never_goes_negative() {
+        let mut b = buf(5, 5, 10);
+        b.set_cursor(1, 1);
+        b.move_cursor(-10, -10);
+        assert_eq!(b.cursor_position(), (0, 0));
+    }
+
+    #[test]
+    fn test_cursor_clamped_after_shrink() {
+        let mut b = buf(10, 10, 10);
+        b.set_cursor(9, 9);
+        b.resize(3, 3);
+        let (x, y) = b.cursor_position();
+        assert!(x <= 2);
+        assert!(y <= 2);
+    }
+
+    #[test]
+    fn test_clear_screen_blanks_all_cells() {
+        let mut b = buf(3, 3, 10);
+        b.write_str("abc");
+        b.clear();
+        for y in 0..3 {
+            for x in 0..3 {
+                assert_eq!(b.get_cell(x, y).unwrap().character, ' ');
+            }
+        }
+    }
+
+    #[test]
+    fn test_clear_line_blanks_current_row_only() {
+        let mut b = buf(3, 2, 10);
+        b.set_cursor(0, 0);
+        b.write_str("abc");
+        b.set_cursor(0, 1);
+        b.write_str("xyz");
+        b.clear_line();
+        // cursor is on row 1
+        for x in 0..3 {
+            assert_eq!(b.get_cell(x, 1).unwrap().character, ' ');
+        }
+        // row 0 untouched
+        assert_eq!(b.get_cell(0, 0).unwrap().character, 'a');
+    }
+
+    #[test]
+    fn test_clear_line_to_end() {
+        let mut b = buf(5, 1, 10);
+        b.write_str("abcde");
+        b.set_cursor(2, 0);
+        b.clear_line_to_end();
+        assert_eq!(b.get_cell(0, 0).unwrap().character, 'a');
+        assert_eq!(b.get_cell(1, 0).unwrap().character, 'b');
+        assert_eq!(b.get_cell(2, 0).unwrap().character, ' ');
+        assert_eq!(b.get_cell(3, 0).unwrap().character, ' ');
+        assert_eq!(b.get_cell(4, 0).unwrap().character, ' ');
+    }
+
+    #[test]
+    fn test_clear_line_to_start() {
+        let mut b = buf(5, 1, 10);
+        b.write_str("abcde");
+        b.set_cursor(2, 0);
+        b.clear_line_to_start();
+        assert_eq!(b.get_cell(0, 0).unwrap().character, ' ');
+        assert_eq!(b.get_cell(1, 0).unwrap().character, ' ');
+        assert_eq!(b.get_cell(2, 0).unwrap().character, ' ');
+        assert_eq!(b.get_cell(3, 0).unwrap().character, 'd');
+        assert_eq!(b.get_cell(4, 0).unwrap().character, 'e');
+    }
+
+    #[test]
+    fn test_clear_to_end_clears_current_and_following_rows() {
+        let mut b = buf(3, 3, 10);
+        b.set_cursor(0, 0);
+        b.write_str("aaa");
+        b.set_cursor(0, 1);
+        b.write_str("bbb");
+        b.set_cursor(1, 1);
+        b.clear_to_end();
+
+        assert_eq!(b.get_cell(0, 0).unwrap().character, 'a');
+        assert_eq!(b.get_cell(0, 1).unwrap().character, 'b');
+        assert_eq!(b.get_cell(1, 1).unwrap().character, ' ');
+        assert_eq!(b.get_cell(2, 1).unwrap().character, ' ');
+        assert_eq!(b.get_cell(0, 2).unwrap().character, ' ');
+    }
+
+    #[test]
+    fn test_clear_to_start_clears_preceding_rows_and_line_start() {
+        let mut b = buf(3, 3, 10);
+        b.set_cursor(0, 0);
+        b.write_str("aaa");
+        b.set_cursor(0, 1);
+        b.write_str("bbb");
+        b.set_cursor(1, 1);
+        b.clear_to_start();
+
+        assert_eq!(b.get_cell(0, 0).unwrap().character, ' ');
+        assert_eq!(b.get_cell(0, 1).unwrap().character, ' ');
+        assert_eq!(b.get_cell(1, 1).unwrap().character, ' ');
+        assert_eq!(b.get_cell(2, 1).unwrap().character, 'b');
+    }
+
+    #[test]
+    fn test_insert_blank_shifts_row_right() {
+        let mut b = buf(5, 1, 10);
+        b.write_str("abcde");
+        b.set_cursor(1, 0);
+        b.insert_blank(2);
+        assert_eq!(b.get_cell(0, 0).unwrap().character, 'a');
+        assert_eq!(b.get_cell(1, 0).unwrap().character, ' ');
+        assert_eq!(b.get_cell(2, 0).unwrap().character, ' ');
+        assert_eq!(b.get_cell(3, 0).unwrap().character, 'b');
+        assert_eq!(b.get_cell(4, 0).unwrap().character, 'c');
+    }
+
+    #[test]
+    fn test_delete_chars_shifts_row_left() {
+        let mut b = buf(5, 1, 10);
+        b.write_str("abcde");
+        b.set_cursor(1, 0);
+        b.delete_chars(2);
+        assert_eq!(b.get_cell(0, 0).unwrap().character, 'a');
+        assert_eq!(b.get_cell(1, 0).unwrap().character, 'd');
+        assert_eq!(b.get_cell(2, 0).unwrap().character, 'e');
+        assert_eq!(b.get_cell(3, 0).unwrap().character, ' ');
+        assert_eq!(b.get_cell(4, 0).unwrap().character, ' ');
+    }
+
+    #[test]
+    fn test_erase_chars_blanks_without_shifting() {
+        let mut b = buf(5, 1, 10);
+        b.write_str("abcde");
+        b.set_cursor(1, 0);
+        b.erase_chars(2);
+        assert_eq!(b.get_cell(0, 0).unwrap().character, 'a');
+        assert_eq!(b.get_cell(1, 0).unwrap().character, ' ');
+        assert_eq!(b.get_cell(2, 0).unwrap().character, ' ');
+        assert_eq!(b.get_cell(3, 0).unwrap().character, 'd');
+    }
+
+    #[test]
+    fn test_insert_and_delete_lines() {
+        let mut b = buf(3, 3, 10);
+        b.set_cursor(0, 0);
+        b.write_str("AAA");
+        b.set_cursor(0, 1);
+        b.write_str("BBB");
+        b.set_cursor(0, 2);
+        b.write_str("CCC");
+
+        b.set_cursor(0, 0);
+        b.insert_lines(1);
+        // top row now blank, A/B pushed down, C dropped off bottom
+        assert_eq!(b.get_row(0).unwrap()[0].character, ' ');
+        assert_eq!(b.get_row(1).unwrap()[0].character, 'A');
+        assert_eq!(b.get_row(2).unwrap()[0].character, 'B');
+
+        b.set_cursor(0, 0);
+        b.delete_lines(1);
+        // deleting the (blank) top row shifts A back up, blank row appended at bottom
+        assert_eq!(b.get_row(0).unwrap()[0].character, 'A');
+        assert_eq!(b.get_row(1).unwrap()[0].character, 'B');
+        assert_eq!(b.get_row(2).unwrap()[0].character, ' ');
+    }
+
+    #[test]
+    fn test_save_and_restore_cursor() {
+        let mut b = buf(10, 10, 10);
+        b.set_cursor(3, 4);
+        b.save_cursor();
+        b.set_cursor(7, 8);
+        assert_eq!(b.cursor_position(), (7, 8));
+        b.restore_cursor();
+        assert_eq!(b.cursor_position(), (3, 4));
+    }
+
+    #[test]
+    fn test_scroll_region_confines_newline_scroll() {
+        let mut b = buf(5, 5, 10);
+        b.set_cursor(0, 0);
+        b.write_str("row0");
+        b.set_cursor(0, 4);
+        b.write_str("row4");
+
+        // Region is rows 1..=3; scrolling within it must not touch row 0 or row 4.
+        b.set_scroll_region(1, 3);
+        b.set_cursor(0, 1);
+        b.write_str("AAA");
+        b.set_cursor(0, 2);
+        b.write_str("BBB");
+        b.set_cursor(0, 3);
+        b.write_str("CCC");
+        b.set_cursor(0, 3);
+        b.write_char('\n');
+
+        assert_eq!(b.get_row(0).unwrap()[0].character, 'r');
+        assert_eq!(b.get_row(1).unwrap()[0].character, 'B');
+        assert_eq!(b.get_row(2).unwrap()[0].character, 'C');
+        assert_eq!(b.get_row(4).unwrap()[0].character, 'r');
+    }
+
+    #[test]
+    fn test_set_scroll_region_bottom_clamped_to_last_row() {
+        let mut b = buf(5, 5, 10);
+        // bottom far beyond screen must clamp so scrolling still confines to the screen.
+        b.set_scroll_region(2, 9999);
+        b.set_cursor(0, 4);
+        b.write_char('\n');
+        // no panic, cursor stays within bounds
+        let (_, y) = b.cursor_position();
+        assert!(y < 5);
+    }
+
+    #[test]
+    fn test_switch_to_alternate_and_back_preserves_main_screen() {
+        let mut b = buf(5, 2, 10);
+        b.write_str("main1");
+        b.switch_to_alternate();
+        // alternate screen starts blank
+        assert_eq!(b.get_cell(0, 0).unwrap().character, ' ');
+        b.write_str("alt");
+        b.switch_to_main();
+        // main screen content restored
+        assert_eq!(b.get_cell(0, 0).unwrap().character, 'm');
+        assert_eq!(b.get_cell(4, 0).unwrap().character, '1');
+    }
+
+    #[test]
+    fn test_reset_attrs_restores_defaults() {
+        let mut b = buf(5, 5, 10);
+        b.set_fg(Color::RED);
+        b.set_bg(Color::GREEN);
+        let attrs = CellAttributes {
+            bold: true,
+            ..Default::default()
+        };
+        b.set_attr(attrs);
+        b.reset_attrs();
+        assert_eq!(b.current_attrs(), CellAttributes::default());
+        b.write_char('x');
+        let cell = b.get_cell(0, 0).unwrap();
+        assert_eq!(cell.fg, Color::WHITE);
+        assert_eq!(cell.bg, Color::BLACK);
+    }
+
+    #[test]
+    fn test_origin_mode_resets_cursor_to_scroll_top() {
+        let mut b = buf(5, 5, 10);
+        b.set_scroll_region(1, 3);
+        b.set_origin_mode(true);
+        assert_eq!(b.cursor_position(), (0, 1));
+    }
+
+    #[test]
+    fn test_default_impl_creates_standard_terminal() {
+        let b = TerminalBuffer::default();
+        assert_eq!(b.size().cols, 80);
+        assert_eq!(b.size().rows, 24);
     }
 }

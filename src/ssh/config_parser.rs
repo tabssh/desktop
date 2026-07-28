@@ -325,4 +325,235 @@ Host example
             Some((8080, "localhost".to_string(), 80))
         );
     }
+
+    #[test]
+    fn test_parse_forward_empty_and_invalid() {
+        assert_eq!(parse_forward(&[]), None);
+        assert_eq!(parse_forward(&["notaport", "localhost:80"]), None);
+        assert_eq!(parse_forward(&["8080", "localhost"]), None);
+        assert_eq!(parse_forward(&["8080:localhost:notaport"]), None);
+        assert_eq!(parse_forward(&["a:b:c:d"]), None);
+    }
+
+    #[test]
+    fn test_parse_empty_content() {
+        let mut parser = SshConfigParser::new();
+        parser.parse_content("").unwrap();
+        assert!(parser.get_all_hosts().is_empty());
+        assert!(parser.get_config("anything").is_none());
+    }
+
+    #[test]
+    fn test_parse_comments_and_blank_lines_only() {
+        let config = "\n# just a comment\n   \n# another comment\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        assert!(parser.get_all_hosts().is_empty());
+    }
+
+    #[test]
+    fn test_parse_directives_before_any_host_are_ignored() {
+        // Directives that appear before any "Host" line have no current
+        // host to attach to, so they must be silently dropped.
+        let config = "HostName orphan.example.com\nPort 2222\nHost real\n    Port 22\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+
+        let host_config = parser.get_config("real").unwrap();
+        assert_eq!(host_config.port, Some(22));
+        assert_eq!(parser.get_all_hosts(), vec!["real".to_string()]);
+    }
+
+    #[test]
+    fn test_parse_host_with_no_pattern_argument() {
+        // "Host" with nothing after it should not start a new host block
+        // and should not panic.
+        let config = "Host\nHost second\n    Port 22\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        assert_eq!(parser.get_all_hosts(), vec!["second".to_string()]);
+    }
+
+    #[test]
+    fn test_parse_invalid_port_is_ignored() {
+        let config = "Host example\n    Port notanumber\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        let host_config = parser.get_config("example").unwrap();
+        assert_eq!(host_config.port, None);
+    }
+
+    #[test]
+    fn test_parse_port_zero() {
+        let config = "Host example\n    Port 0\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        let host_config = parser.get_config("example").unwrap();
+        assert_eq!(host_config.port, Some(0));
+    }
+
+    #[test]
+    fn test_parse_duplicate_directive_uses_last_value() {
+        let config = "Host example\n    Port 22\n    Port 2222\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        let host_config = parser.get_config("example").unwrap();
+        assert_eq!(host_config.port, Some(2222));
+    }
+
+    #[test]
+    fn test_parse_duplicate_host_blocks_last_wins() {
+        let config = "Host example\n    Port 22\nHost example\n    Port 33\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        let host_config = parser.get_config("example").unwrap();
+        assert_eq!(host_config.port, Some(33));
+    }
+
+    #[test]
+    fn test_parse_multiple_identity_files_accumulate() {
+        let config =
+            "Host example\n    IdentityFile ~/.ssh/id_rsa\n    IdentityFile ~/.ssh/id_ed25519\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        let host_config = parser.get_config("example").unwrap();
+        assert_eq!(host_config.identity_file.len(), 2);
+        assert!(!host_config.identity_file[0].starts_with('~'));
+    }
+
+    #[test]
+    fn test_parse_proxycommand_joins_remaining_args() {
+        let config = "Host example\n    ProxyCommand ssh -W %h:%p bastion\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        let host_config = parser.get_config("example").unwrap();
+        assert_eq!(
+            host_config.proxy_command,
+            Some("ssh -W %h:%p bastion".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_compression_yes_no() {
+        let config = "Host a\n    Compression yes\nHost b\n    Compression no\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        assert_eq!(parser.get_config("a").unwrap().compression, Some(true));
+        assert_eq!(parser.get_config("b").unwrap().compression, Some(false));
+    }
+
+    #[test]
+    fn test_parse_local_and_remote_and_dynamic_forward() {
+        let config = "Host example\n    LocalForward 8080 localhost:80\n    RemoteForward 9090 localhost:90\n    DynamicForward 1080\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        let host_config = parser.get_config("example").unwrap();
+        assert_eq!(
+            host_config.local_forward,
+            vec![(8080, "localhost".to_string(), 80)]
+        );
+        assert_eq!(
+            host_config.remote_forward,
+            vec![(9090, "localhost".to_string(), 90)]
+        );
+        assert_eq!(host_config.dynamic_forward, vec![1080]);
+    }
+
+    #[test]
+    fn test_parse_server_alive_interval() {
+        let config = "Host example\n    ServerAliveInterval 15\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        let host_config = parser.get_config("example").unwrap();
+        assert_eq!(host_config.server_alive_interval, Some(15));
+    }
+
+    #[test]
+    fn test_parse_unknown_directive_is_ignored() {
+        let config = "Host example\n    ThisIsNotARealDirective foo\n    Port 22\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        let host_config = parser.get_config("example").unwrap();
+        assert_eq!(host_config.port, Some(22));
+    }
+
+    #[test]
+    fn test_parse_directive_missing_value_is_ignored() {
+        // "Port" with no value should not set anything and must not panic.
+        let config = "Host example\n    Port\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        let host_config = parser.get_config("example").unwrap();
+        assert_eq!(host_config.port, None);
+    }
+
+    #[test]
+    fn test_parse_keywords_are_case_insensitive() {
+        let config = "HOST example\n    HOSTNAME example.com\n    PORT 22\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        let host_config = parser.get_config("example").unwrap();
+        assert_eq!(host_config.hostname, Some("example.com".to_string()));
+        assert_eq!(host_config.port, Some(22));
+    }
+
+    #[test]
+    fn test_get_config_no_match_returns_none() {
+        let mut parser = SshConfigParser::new();
+        parser.parse_content("Host example\n    Port 22\n").unwrap();
+        assert!(parser.get_config("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_get_config_wildcard_prefers_specific_over_catch_all() {
+        let config = "Host *\n    Port 1\nHost *.internal\n    Port 2\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        let host_config = parser.get_config("db.internal").unwrap();
+        assert_eq!(host_config.port, Some(2));
+    }
+
+    #[test]
+    fn test_get_config_falls_back_to_catch_all() {
+        let config = "Host *\n    Port 1\nHost *.internal\n    Port 2\n";
+        let mut parser = SshConfigParser::new();
+        parser.parse_content(config).unwrap();
+        let host_config = parser.get_config("outside.example.com").unwrap();
+        assert_eq!(host_config.port, Some(1));
+    }
+
+    #[test]
+    fn test_wildcard_match_edge_cases() {
+        assert!(wildcard_match("*", ""));
+        assert!(wildcard_match("*", "anything"));
+        assert!(wildcard_match("", ""));
+        assert!(!wildcard_match("", "x"));
+        assert!(!wildcard_match("exact", "exactly"));
+        assert!(wildcard_match("exact", "exact"));
+    }
+
+    #[test]
+    fn test_expand_tilde_only_replaces_leading_tilde() {
+        let expanded = expand_tilde("~/.ssh/id_rsa");
+        assert!(!expanded.starts_with('~'));
+        assert!(expanded.ends_with("/.ssh/id_rsa"));
+
+        // No leading tilde: left untouched.
+        assert_eq!(expand_tilde("/absolute/path"), "/absolute/path");
+    }
+
+    #[test]
+    fn test_default_parser_has_no_hosts() {
+        let parser = SshConfigParser::default();
+        assert!(parser.get_all_hosts().is_empty());
+    }
+
+    #[test]
+    fn test_host_config_default() {
+        let host_config = HostConfig::default();
+        assert_eq!(host_config.host_pattern, "");
+        assert!(host_config.hostname.is_none());
+        assert!(host_config.port.is_none());
+        assert!(host_config.identity_file.is_empty());
+    }
 }
