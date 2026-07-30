@@ -351,3 +351,42 @@ Plus interop guarantees:
 - The cloud sync `TABSSH_SYNC_V2` format must be **byte-compatible** with mobile (an encrypted blob written by desktop must round-trip through mobile and vice versa).
 - The encrypted ZIP backup/restore format must be readable on both platforms.
 - The 23 built-in theme JSONs must be byte-identical between platforms (one source of truth in `assets/themes/`).
+
+---
+
+## CI/CD follow-ups (found during AI.md Docker/CI alignment pass)
+
+- Release Docker-image publish parity: `.github/workflows/release.yml` now
+  builds/pushes/attests a multi-arch `ghcr.io` image (`publish-image` job),
+  but `.gitlab-ci.yml`, `.gitea/workflows/release.yml`, and
+  `.forgejo/workflows/release.yml` do not have an equivalent image-publish
+  step. AI.md's CI/CD rules require the same gates on every provider — decide
+  whether to add matching image-publish jobs to the other four providers'
+  release pipelines (registry target per provider) or document why GitHub-only
+  publishing is acceptable.
+- `.github/workflows/release.yml` "Validate release tag" step deletes and
+  re-pushes the triggering tag (`git tag -d` + `git push origin
+  :refs/tags/$tag` + re-create + re-push). AI.md does not document this
+  pattern; confirm it is intentional and still needed, or simplify.
+- `.gitea/workflows/ci.yml` and `.forgejo/workflows/ci.yml` derive the binary
+  name from `${{ github.event.repository.name }}`, while
+  `.github/workflows/ci.yml` derives `CRATE_NAME` via `grep` on `Cargo.toml`.
+  These will diverge if the crate name and repo name ever differ. Align all
+  three on the same derivation method.
+
+## rust-lint findings (pre-existing, unrelated to Docker/CI alignment pass)
+
+- Makefile lines 32, 55: output binary name uses `amd64` — must use `x86_64`.
+- Makefile line 61: output binary name uses `arm64` — must use `aarch64`.
+- Makefile lines 13-19: `DOCKER_RUN` definition is missing cache mounts —
+  add `-v $(CARGO_CACHE):/root/.cargo -v $(RUSTUP_CACHE):/root/.rustup
+  -v $(SCCACHE_CACHE):/root/.cache/sccache -v $(CARGO_TARGET):/work/target`
+  and define `CARGO_CACHE ?= $(HOME)/.cargo`, `RUSTUP_CACHE ?= $(HOME)/.rustup`,
+  `SCCACHE_CACHE ?= $(HOME)/.cache/sccache`,
+  `CARGO_TARGET ?= $(HOME)/.cache/cargo-target/$(PROJECT)`.
+- Makefile lines 31, 54, 60, 94, 100, 106, 124: `DOCKER_RUN` invoked without a
+  preceding `@mkdir -p $(CARGO_CACHE) $(RUSTUP_CACHE) $(SCCACHE_CACHE)
+  $(CARGO_TARGET)` guard — add as the first recipe line in each target.
+- Cargo.toml line 59: `[profile.release-small]` sets `strip = "symbols"`,
+  which differs from `[profile.release]`'s `strip = true` — align unless
+  release-small is intentionally a different minimal profile.

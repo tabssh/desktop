@@ -116,7 +116,7 @@ repo:             https://github.com/tabssh/desktop
 
 **Credential security**
 - OS-keychain-backed credential storage: Linux Secret Service, macOS Keychain, Windows Credential Manager — single `keyring` crate API
-- Four storage levels: Never, SessionOnly, Encrypted (default), Biometric
+- Four storage levels: Never, SessionOnly, Encrypted (default), Biometric — Biometric tier unlocks through the OS's own factor: Windows Hello (`windows-rs` credential prompt), macOS Touch ID (`LocalAuthentication` via Keychain access control), Linux `polkit`/`fprintd` where available; on platforms/hardware without a biometric factor the tier falls back to the OS keychain's own auth prompt (password/PIN), never to plaintext
 - Cipher: AES/GCM/NoPadding, 12-byte IV, 128-bit tag; hardware-backed where OS supports it
 - Auto-lock on idle; configurable TTL (default 24 hours)
 - Passwords and private keys must never be stored in plaintext on disk or in the database
@@ -127,12 +127,13 @@ repo:             https://github.com/tabssh/desktop
 - Optional PIN code app lock; SHA-256 hash of PIN stored in preferences (never plaintext)
 - `MAX_ATTEMPTS = 5`: after 5 failed verify attempts, lock is reset and a new PIN must be set
 - Auto-lock when app is backgrounded longer than configurable timeout (default 300s)
+- Screenshot/screen-capture prevention on PIN and auth screens, configurable: on Windows via `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`, on macOS via `NSWindow.sharingType = .none`; Linux/Wayland has no equivalent OS primitive, so the setting is a no-op there and the UI must say so rather than silently claim protection
 
 **Themes and UI**
 - 23 built-in terminal themes (byte-compatible with the Android sibling's `BuiltInThemes.kt` catalogue): System Default / Dark / Light, Dracula, Solarized Dark/Light, Nord, One Dark, Monokai, Gruvbox Dark/Light, Tomorrow Night, GitHub Light, Atom One Dark, Material Dark, Tokyo Night/Light, Catppuccin Mocha, Rose Pine, Everforest, Kanagawa, Night Owl, Cobalt2
 - Theme structure: id, name, author, isDark/isBuiltIn, terminal foreground/background/cursor/selection/highlight, 16-entry ANSI palette, UI overrides
 - GUI theme editor; WCAG AA/AAA contrast validation; color-blindness simulation (protanopia, deuteranopia, tritanopia); import/export theme JSON (VS Code theme format compatible)
-- Per-host color tags
+- Per-host color tags; per-connection terminal font size override
 - Workspaces (named tab groups; each workspace maps to a set of connection profile IDs)
 - Command palette (Ctrl+K), quick switcher (Ctrl+J), history palette (Ctrl+R)
 - Split-pane terminals
@@ -142,6 +143,12 @@ repo:             https://github.com/tabssh/desktop
 - Connection groups/folders — hierarchical, collapsible, group types (user / system auto-groups)
 - Recordable macros (raw byte sequences including escape codes, paste payloads, modifier-composed keys; distinct from snippets; replay verbatim)
 - Active Sessions strip: top-of-window list of running tabs with terminal title (OSC 0/2) + connection-state indicator; click to focus
+
+**Accessibility**
+- Screen-reader support via `egui`'s AccessKit integration (Windows Narrator, macOS VoiceOver, Linux Orca/AT-SPI) — the desktop analogue of the Android sibling's TalkBack requirement; every interactive widget exposes an accessible name/role
+- Full keyboard navigation — every action reachable via the command palette (Ctrl+K) or a bound shortcut, no mouse-only affordances
+- High-contrast mode and large-text/UI-scale mode, in addition to the WCAG AA/AAA theme contrast validation already listed under Themes and UI
+- Dark/light/auto per OS preference
 
 **Performance monitoring**
 - Per-connection SSH-exec metrics: CPU (`/proc/stat` delta), memory (`/proc/meminfo`), disk (`df -h /`), network (`/proc/net/dev` delta), load average (`/proc/loadavg`), platform info (`uname -a` + `/etc/os-release`, cached per session)
@@ -210,7 +217,7 @@ repo:             https://github.com/tabssh/desktop
 - Reusable `HypervisorAccount` credentials (separate from per-profile inline credentials)
 
 **Cloud host import**
-- DigitalOcean, Hetzner, Linode, Vultr, AWS EC2, Google Cloud Compute, Azure VMs
+- DigitalOcean, Hetzner, Linode, Vultr, AWS EC2, Google Cloud Compute, Azure VMs, Oracle Cloud Infrastructure (OCI) — same 8-provider surface as the Android sibling's cloud provider management; OCI instance import reuses the API-key auth/endpoints defined under Hypervisor management (OCI), it is not a second credential model
 - On import: connect to provider REST API, enumerate instances, create `ConnectionProfile` rows with public IP, username, port
 - Tokens stored in the OS keychain under `cloud_token_{accountId}`; never in the database
 - `CloudAccount` row stores only metadata (provider, enabled, lastRefreshAt, lastCount)

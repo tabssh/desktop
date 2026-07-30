@@ -55,8 +55,11 @@ jobs:
 
       - name: Verify static linkage
         run: |
+          # musl's ldd on a genuinely static binary reports "Not a valid
+          # dynamic program" (not glibc's "not a dynamic executable"
+          # wording), so match both phrasings case-insensitively.
           ldd target/x86_64-unknown-linux-musl/release/${{ github.event.repository.name }} 2>&1 \
-            | grep -qE 'not a dynamic executable|statically linked'
+            | grep -qiE 'not a dynamic executable|not a valid dynamic program|statically linked'
 
       - name: Stage artifact
         run: |

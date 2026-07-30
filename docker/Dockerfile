@@ -37,6 +37,7 @@ ARG LICENSE=MIT
 RUN apk add --no-cache \
     bash \
     tini \
+    procps \
     libx11 \
     libxcb \
     wayland-libs-client \
@@ -54,5 +55,10 @@ RUN chmod +x /usr/local/bin/tabssh /usr/local/bin/entrypoint.sh
 USER tabssh
 WORKDIR /home/tabssh
 
-ENTRYPOINT ["tini", "--", "/usr/local/bin/entrypoint.sh"]
+STOPSIGNAL SIGTERM
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD pgrep -x tabssh || exit 1
+
+ENTRYPOINT ["tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh"]
 CMD ["tabssh"]

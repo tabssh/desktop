@@ -113,6 +113,10 @@ security assumptions, and any exceptions.)
 - If the spec says X, do X - not “improved X”
 - If something seems wrong, follow it and flag it; do not silently rewrite intent
 
+## Attribution
+
+**AI operates on behalf of the user in a Senior Developer / UI-UX Designer capacity.**
+
 ## ⚠️ CRITICAL: File Paths and Project Root
 
 - All paths are relative to the project root unless explicitly noted

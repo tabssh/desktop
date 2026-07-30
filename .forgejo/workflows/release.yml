@@ -75,8 +75,11 @@ jobs:
             cp "target/$TARGET/release/$REPO" "dist/$ARTIFACT"
             sha256sum "dist/$ARTIFACT" > "dist/$ARTIFACT.sha256"
 
+            # musl's ldd on a genuinely static binary reports "Not a valid
+            # dynamic program" (not glibc's "not a dynamic executable"
+            # wording), so match both phrasings case-insensitively.
             ldd "target/$TARGET/release/$REPO" 2>&1 \
-              | grep -qE 'not a dynamic executable|statically linked' \
+              | grep -qiE 'not a dynamic executable|not a valid dynamic program|statically linked' \
               || { echo "::error::$TARGET binary has unexpected dynamic deps"; exit 1; }
           done
 

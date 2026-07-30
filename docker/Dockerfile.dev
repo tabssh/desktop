@@ -13,11 +13,18 @@ RUN apk add --no-cache \
     mesa-gl \
     ttf-dejavu
 
-WORKDIR /work
+RUN adduser -D -h /home/dev dev \
+    && mkdir -p /usr/local/cargo/registry /usr/local/cargo/git /work/target \
+    && chown -R dev:dev /usr/local/cargo/registry /usr/local/cargo/git /work /home/dev
 
 COPY docker/rootfs/ /
 
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-ENTRYPOINT ["tini", "--", "/usr/local/bin/entrypoint.sh"]
+USER dev
+WORKDIR /work
+
+STOPSIGNAL SIGTERM
+
+ENTRYPOINT ["tini", "-p", "SIGTERM", "--", "/usr/local/bin/entrypoint.sh"]
 CMD ["cargo", "run", "--", "--ui", "gui"]
