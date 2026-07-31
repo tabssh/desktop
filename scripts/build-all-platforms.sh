@@ -33,14 +33,11 @@ else
     echo "Skipping macOS builds (requires macOS host)"
 fi
 
-# Windows (requires Windows host or cross toolchain)
-if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
-    echo "Building Windows AMD64..."
-    cargo build --release --target x86_64-pc-windows-msvc
-    cp target/x86_64-pc-windows-msvc/release/tabssh.exe $OUTPUT_DIR/tabssh-windows-amd64.exe
-else
-    echo "Skipping Windows builds (requires Windows host)"
-fi
+# Windows (cross-compiled via GNU target, no MSVC toolchain available)
+echo "Building Windows AMD64..."
+docker run --rm -v $(pwd):/workspace -w /workspace tabssh-builder:latest \
+    cargo build --release --target x86_64-pc-windows-gnu
+cp target/x86_64-pc-windows-gnu/release/tabssh.exe $OUTPUT_DIR/tabssh-windows-amd64.exe
 
 # Generate checksums
 cd $OUTPUT_DIR

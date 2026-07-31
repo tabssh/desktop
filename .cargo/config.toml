@@ -15,10 +15,10 @@ rustflags = ["-C", "target-feature=+crt-static", "-C", "relocation-model=static"
 linker = "rust-lld"
 rustflags = ["-C", "target-feature=+crt-static", "-C", "relocation-model=static"]
 
-[target.x86_64-pc-windows-msvc]
+[target.x86_64-pc-windows-gnu]
 rustflags = ["-C", "target-feature=+crt-static"]
 
-[target.aarch64-pc-windows-msvc]
+[target.aarch64-pc-windows-gnullvm]
 rustflags = ["-C", "target-feature=+crt-static"]
 
 [target.x86_64-unknown-freebsd]

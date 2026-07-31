@@ -9,11 +9,21 @@ COMMIT := $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE := $(shell date "+%Y-%m-%d %H:%M:%S")
 DOCKER_IMAGE ?= casjaysdev/rust:latest
 
+# Cache directories (persist across Docker runs)
+CARGO_CACHE ?= $(HOME)/.cargo
+RUSTUP_CACHE ?= $(HOME)/.rustup
+SCCACHE_CACHE ?= $(HOME)/.cache/sccache
+CARGO_TARGET ?= $(HOME)/.cache/cargo-target/$(PROJECT)
+
 # Docker run command
 DOCKER_RUN := docker run --rm \
 	--name "$(PROJECT)-$$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
 	-v $(PWD):/work \
 	-w /work \
+	-v $(CARGO_CACHE):/root/.cargo \
+	-v $(RUSTUP_CACHE):/root/.rustup \
+	-v $(SCCACHE_CACHE):/root/.cache/sccache \
+	-v $(CARGO_TARGET):/root/.cache/cargo-target \
 	-e TABSSH_BUILD_COMMIT=$(COMMIT) \
 	-e TABSSH_BUILD_DATE="$(BUILD_DATE)" \
 	$(DOCKER_IMAGE)
@@ -25,6 +35,7 @@ build:
 	@echo "Date: $(BUILD_DATE)"
 	@echo ""
 	@mkdir -p binaries
+	@mkdir -p $(CARGO_CACHE) $(RUSTUP_CACHE) $(SCCACHE_CACHE) $(CARGO_TARGET)
 
 	@# Build Linux x86_64 (static musl)
 	@echo "Building $(PROJECT)-linux-amd64 (musl)..."
@@ -48,6 +59,7 @@ release:
 	@echo "Date: $(BUILD_DATE)"
 	@echo ""
 	@mkdir -p releases
+	@mkdir -p $(CARGO_CACHE) $(RUSTUP_CACHE) $(SCCACHE_CACHE) $(CARGO_TARGET)
 
 	@# Build Linux x86_64 (static musl)
 	@echo "Building $(PROJECT)-linux-amd64 (musl)..."
@@ -91,17 +103,20 @@ release:
 # Run tests in Docker
 test:
 	@echo "=== Running tests ==="
+	@mkdir -p $(CARGO_CACHE) $(RUSTUP_CACHE) $(SCCACHE_CACHE) $(CARGO_TARGET)
 	@$(DOCKER_RUN) cargo fmt --all --check
 	@$(DOCKER_RUN) cargo test --workspace --all-features --target x86_64-unknown-linux-musl
 
 # Auto-format all source files in Docker
 fmt:
 	@echo "=== Formatting source ==="
+	@mkdir -p $(CARGO_CACHE) $(RUSTUP_CACHE) $(SCCACHE_CACHE) $(CARGO_TARGET)
 	@$(DOCKER_RUN) cargo fmt --all
 
 # Format check and clippy in Docker
 check:
 	@echo "=== Running fmt + clippy ==="
+	@mkdir -p $(CARGO_CACHE) $(RUSTUP_CACHE) $(SCCACHE_CACHE) $(CARGO_TARGET)
 	@$(DOCKER_RUN) cargo fmt --all --check
 	@$(DOCKER_RUN) cargo clippy --workspace --all-targets --all-features --target x86_64-unknown-linux-musl -- -D warnings
 

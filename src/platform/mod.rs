@@ -36,11 +36,33 @@ impl PlatformManager {
     }
 
     pub fn get_config_directory() -> Option<std::path::PathBuf> {
-        dirs::config_dir().map(|p| p.join("tabssh"))
+        #[cfg(target_os = "macos")]
+        {
+            dirs::config_dir().map(|p| p.join("tabssh").join("config"))
+        }
+        #[cfg(target_os = "windows")]
+        {
+            dirs::config_dir().map(|p| p.join("tabssh").join("tabssh").join("config"))
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        {
+            dirs::config_dir().map(|p| p.join("tabssh").join("tabssh"))
+        }
     }
 
     pub fn get_data_directory() -> Option<std::path::PathBuf> {
-        dirs::data_dir().map(|p| p.join("tabssh"))
+        #[cfg(target_os = "macos")]
+        {
+            dirs::data_dir().map(|p| p.join("tabssh").join("data"))
+        }
+        #[cfg(target_os = "windows")]
+        {
+            dirs::data_local_dir().map(|p| p.join("tabssh").join("tabssh").join("data"))
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        {
+            dirs::data_dir().map(|p| p.join("tabssh").join("tabssh"))
+        }
     }
 }
 
@@ -103,16 +125,16 @@ mod tests {
     }
 
     #[test]
-    fn test_get_config_directory_ends_with_tabssh() {
+    fn test_get_config_directory_contains_tabssh() {
         if let Some(dir) = PlatformManager::get_config_directory() {
-            assert_eq!(dir.file_name().unwrap(), "tabssh");
+            assert!(dir.components().any(|c| c.as_os_str() == "tabssh"));
         }
     }
 
     #[test]
-    fn test_get_data_directory_ends_with_tabssh() {
+    fn test_get_data_directory_contains_tabssh() {
         if let Some(dir) = PlatformManager::get_data_directory() {
-            assert_eq!(dir.file_name().unwrap(), "tabssh");
+            assert!(dir.components().any(|c| c.as_os_str() == "tabssh"));
         }
     }
 }

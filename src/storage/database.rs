@@ -32,10 +32,10 @@ impl Database {
 
     /// Get the database file path
     fn database_path() -> Result<PathBuf> {
-        let data_dir =
-            dirs::data_dir().ok_or_else(|| anyhow::anyhow!("Could not find data directory"))?;
+        let data_dir = crate::platform::PlatformManager::get_data_directory()
+            .ok_or_else(|| anyhow::anyhow!("Could not find data directory"))?;
 
-        Ok(data_dir.join("tabssh").join("tabssh.db"))
+        Ok(data_dir.join("tabssh.db"))
     }
 
     /// Initialize database schema

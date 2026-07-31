@@ -25,6 +25,7 @@ pub struct HostKeyInfo {
 }
 
 impl HostKeyInfo {
+    // Constructor for the not-yet-wired TOFU verification flow (see TODO.AI.md Phase 1.1)
     #[allow(dead_code)]
     pub fn from_public_key(host: &str, port: u16, key: &PublicKey) -> Self {
         let fingerprint = key.fingerprint(Default::default()).to_string();
@@ -74,7 +75,7 @@ pub async fn verify_host_key(
             } else {
                 // MITM ATTACK DETECTED!
                 log::error!(
-                    "⚠️  HOST KEY MISMATCH for {}:{} - Possible MITM attack!",
+                    "HOST KEY MISMATCH for {}:{} - Possible MITM attack!",
                     host,
                     port
                 );
@@ -299,6 +300,7 @@ impl SshConnection {
 /// distinct jump-host vs. target-host connection parameters (host/port/user/
 /// creds for each side) and is left unrefactored until the call site lands.
 #[allow(dead_code)]
+// Argument count mirrors distinct jump-host vs. target-host connection parameters; see doc comment above
 #[allow(clippy::too_many_arguments)]
 pub async fn connect_through_jump_host(
     jump_host: &str,
