@@ -195,8 +195,8 @@ The deliverable for each supported target is **one statically linked binary** th
 | `x86_64-unknown-linux-musl` | fully static (musl libc) | Default Linux release target |
 | `aarch64-unknown-linux-musl` | fully static (musl libc) | Default ARM64 Linux release target |
 | `x86_64-unknown-freebsd` / `x86_64-unknown-netbsd` / `x86_64-unknown-openbsd` (and aarch64 equivalents) | native BSD libc, statically linked where the platform supports it | BSD targets use the platform's own libc — they are NOT musl; opt-in per IDEA.md |
-| `x86_64-pc-windows-msvc` | static CRT (`+crt-static`) | Single `.exe` with no MSVC runtime DLL dependency |
-| `aarch64-pc-windows-msvc` | static CRT (`+crt-static`) | Single `.exe` |
+| `x86_64-pc-windows-gnu` | static CRT via `-C target-feature=+crt-static` | Single `.exe`; `casjaysdev/rust:latest` does not ship an MSVC toolchain — `*-pc-windows-msvc` is NOT buildable, use `-gnu`/`-gnullvm` |
+| `aarch64-pc-windows-gnullvm` | static CRT via `-C target-feature=+crt-static` | Single `.exe`; no MSVC toolchain in the image — use `-gnullvm`, not `-msvc` |
 | `x86_64-apple-darwin` / `aarch64-apple-darwin` | system frameworks only (Apple does not allow static libSystem) | "Static" here means: no third-party dynamic libraries; only Apple-provided frameworks resolved at runtime |
 
 **Rules:**
@@ -381,7 +381,7 @@ Distribution artifact names follow the schema:
 - Strip the `-musl` libc suffix from the artifact name. `x86_64-unknown-linux-musl` → `linux-amd64`, NOT `linux-amd64-musl`. Static linkage is the project default (PART 0 → "Single Static Binary"), so calling it out in the filename is redundant.
 - Strip the vendor token (`unknown`, `pc`, `apple`) from the artifact name.
 - Strip the ABI token (`gnu`, `msvc`, `eabihf`, …) from the artifact name unless multiple ABIs of the same `{platform}-{arch}` ship in the same release; in that rare case append `-{abi}` after `{arch}`.
-- `apple-darwin` maps to `darwin`. `pc-windows-msvc` maps to `windows`. `unknown-linux-musl` maps to `linux`. `x86_64` maps to `amd64`; `aarch64` maps to `arm64` — artifact names use Go-style OS/arch terms so Go and Rust releases are named identically.
+- `apple-darwin` maps to `darwin`. `pc-windows-gnu` / `pc-windows-gnullvm` maps to `windows`. `unknown-linux-musl` maps to `linux`. `x86_64` maps to `amd64`; `aarch64` maps to `arm64` — artifact names use Go-style OS/arch terms so Go and Rust releases are named identically.
 
 **Worked examples:**
 
@@ -390,8 +390,8 @@ Distribution artifact names follow the schema:
 | `x86_64-unknown-linux-musl` | `{project_name}-linux-amd64` |
 | `aarch64-unknown-linux-musl` | `{project_name}-linux-arm64` |
 | `armv7-unknown-linux-musleabihf` | `{project_name}-linux-armv7` |
-| `x86_64-pc-windows-msvc` | `{project_name}-windows-amd64.exe` |
-| `aarch64-pc-windows-msvc` | `{project_name}-windows-arm64.exe` |
+| `x86_64-pc-windows-gnu` | `{project_name}-windows-amd64.exe` |
+| `aarch64-pc-windows-gnullvm` | `{project_name}-windows-arm64.exe` |
 | `x86_64-apple-darwin` | `{project_name}-darwin-amd64` |
 | `aarch64-apple-darwin` | `{project_name}-darwin-arm64` |
 | `x86_64-unknown-freebsd` | `{project_name}-freebsd-amd64` |
@@ -591,7 +591,7 @@ Prefer platform-standard user directories:
 |------|-------------|
 | Rust edition | Use the current stable Rust edition declared in `Cargo.toml` |
 | Toolchain channel | Stable by default; toolchain version pinned in `rust-toolchain.toml` |
-| Targets | Static targets pre-installed in the Docker image: `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, Windows MSVC targets with `+crt-static`, Apple Silicon + x86_64 macOS. BSD targets (`x86_64-unknown-{freebsd,netbsd,openbsd}` and aarch64 equivalents) are opt-in — added to the image only when IDEA.md declares them in scope (PART 0 → "Single Static Binary") |
+| Targets | Static targets pre-installed in the Docker image: `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, Windows GNU targets (`x86_64-pc-windows-gnu`, `aarch64-pc-windows-gnullvm`) with `+crt-static` — the image ships no MSVC toolchain, so `*-pc-windows-msvc` is NOT buildable — Apple Silicon + x86_64 macOS. `x86_64-unknown-freebsd` is pre-installed; other BSD targets (`netbsd`, `openbsd`, aarch64 equivalents) are opt-in via `rustup target add` when IDEA.md declares them in scope (PART 0 → "Single Static Binary") |
 | Formatting | `rustfmt` is required; default `max_width = 100` — do not override without a `rustfmt.toml` |
 | Linting | `clippy` is required |
 | Testing | `cargo test` is required |
@@ -686,9 +686,9 @@ Bare `cargo …` invocations on the host are forbidden by PART 0 → "No Host To
 - **Pure Rust by default** — every dependency is pure Rust unless a specific exception is documented in `IDEA.md` and the C code is statically linked into the final binary (PART 0 → "Rust-Only Application")
 - Release builds use `cargo build --release` against a static target (e.g., `--target x86_64-unknown-linux-musl`) inside the Docker image
 - The final artifact MUST be a single statically linked binary per target (PART 0 → "Single Static Binary")
-- Use `RUSTFLAGS="-C target-feature=+crt-static"` for Windows MSVC targets; use musl targets for Linux; for BSDs, use the platform's native target triple and statically link where the platform allows
+- Use `RUSTFLAGS="-C target-feature=+crt-static"` for Windows GNU targets (`x86_64-pc-windows-gnu`, `aarch64-pc-windows-gnullvm`) — the image has no MSVC toolchain, so `*-pc-windows-msvc` is not an option; use musl targets for Linux; for BSDs, use the platform's native target triple and statically link where the platform allows
 - All runtime assets are embedded at compile time; the repo's `assets/` directory is build-time input only (PART 0 → "Self-Contained Assets")
-- A static-binary self-check runs as part of CI (`ldd` on Linux musl artifacts must show "not a dynamic executable" or only kernel-vDSO; `otool -L` on macOS must show only Apple-provided frameworks; `dumpbin /dependents` on Windows static-CRT must show no MSVC runtime DLLs)
+- A static-binary self-check runs as part of CI (`ldd` on Linux musl artifacts must show "not a dynamic executable" or only kernel-vDSO; `otool -L` on macOS must show only Apple-provided frameworks; `dumpbin /dependents` on Windows GNU/static-CRT builds must show no MinGW runtime DLLs)
 - If a workspace is used, keep one top-level `Cargo.toml` as the build entry point
 - Recommended release profile in `Cargo.toml`:
 
@@ -710,10 +710,10 @@ rustflags = ["-C", "target-feature=+crt-static"]
 [target.aarch64-unknown-linux-musl]
 rustflags = ["-C", "target-feature=+crt-static"]
 
-[target.x86_64-pc-windows-msvc]
+[target.x86_64-pc-windows-gnu]
 rustflags = ["-C", "target-feature=+crt-static"]
 
-[target.aarch64-pc-windows-msvc]
+[target.aarch64-pc-windows-gnullvm]
 rustflags = ["-C", "target-feature=+crt-static"]
 ```
 
@@ -1580,7 +1580,7 @@ for TARGET in x86_64-unknown-linux-musl aarch64-unknown-linux-musl; do
   # dynamic deps appear. Use the appropriate inspector per target family:
   #   Linux musl     → ldd  (expect "not a dynamic executable" / "statically linked")
   #   Apple darwin   → otool -L (expect only Apple-provided frameworks)
-  #   Windows MSVC   → dumpbin /dependents (expect no MSVC runtime DLLs)
+  #   Windows GNU    → dumpbin /dependents (expect no MinGW runtime DLLs; image has no MSVC toolchain)
   docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
     sh -c "ldd target/$TARGET/release/{project_name} 2>&1 | grep -qE 'not a dynamic executable|statically linked'"
 done
