@@ -4,9 +4,9 @@ Cross-platform SSH/SFTP/VNC client for developers and sysadmins. Browser-style t
 
 [![CI](https://github.com/tabssh/desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/tabssh/desktop/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/tabssh/desktop?label=release)](https://github.com/tabssh/desktop/releases)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE.md)
+[![License](https://img.shields.io/github/license/tabssh/desktop)](LICENSE.md)
 
-> **Status (2026-06-14):** Early development. Core SSH sessions and terminal emulation are functional; SFTP, hypervisor management, and several UI screens are still in progress. No stable release yet — install from source via Docker.
+> **Status (2026-08-01):** Early development. The GUI is the only runtime mode currently wired; core SSH sessions and terminal emulation are functional, while SFTP, hypervisor management, host-key verification, and several UI screens are still in progress. TUI and CLI connection modes are planned but not yet available. No stable release yet — install from source via Docker.
 
 ---
 
@@ -134,7 +134,25 @@ docker compose -f docker/docker-compose.test.yml up test
 
 ## 🖥️ CLI
 
-TabSSH ships a CLI mode for quick connections from the shell:
+TabSSH exposes the standard universal flags today; direct-connect CLI/TUI
+modes are planned (see the status note above) and not yet wired.
+
+Available now:
+
+```bash
+# Show help / version
+tabssh --help
+tabssh --version
+
+# Launch the GUI explicitly (default when a local display is present)
+tabssh --ui gui
+
+# Enable debug logging / control color output
+tabssh --debug --color no
+```
+
+Planned (not yet available — `--ui tui|cli` currently reports that the mode
+is unimplemented):
 
 ```bash
 # Connect by user@host
@@ -142,9 +160,6 @@ tabssh user@host
 
 # Connect by saved profile name
 tabssh --connect "Production DB"
-
-# Launch GUI explicitly
-tabssh --ui gui
 
 # SSH options
 tabssh -p 2222 -i ~/.ssh/id_ed25519 user@host

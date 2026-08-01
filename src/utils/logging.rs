@@ -1,10 +1,10 @@
 //! Logging configuration
 
-use env_logger::Builder;
+use env_logger::{Builder, WriteStyle};
 use log::LevelFilter;
 use std::io::Write;
 
-pub fn init_logging(level: &str) {
+pub fn init_logging(level: &str, style: WriteStyle) {
     let log_level = match level.to_lowercase().as_str() {
         "trace" => LevelFilter::Trace,
         "debug" => LevelFilter::Debug,
@@ -16,6 +16,7 @@ pub fn init_logging(level: &str) {
 
     Builder::new()
         .filter_level(log_level)
+        .write_style(style)
         .format(|buf, record| {
             writeln!(
                 buf,
@@ -73,7 +74,7 @@ mod tests {
     fn test_init_logging_levels_and_repeat_calls() {
         // First call installs the real global logger (only one process-wide
         // logger may ever be installed).
-        init_logging("trace");
+        init_logging("trace", WriteStyle::Never);
         assert!(log::max_level() >= LevelFilter::Trace);
 
         // Every subsequent call still runs the level-parsing match arm
@@ -81,7 +82,7 @@ mod tests {
         // default) before env_logger rejects the second logger install
         // with a panic — assert that panic actually happens.
         for level in ["debug", "info", "warn", "error", "unknown-level", ""] {
-            let result = std::panic::catch_unwind(|| init_logging(level));
+            let result = std::panic::catch_unwind(|| init_logging(level, WriteStyle::Never));
             assert!(
                 result.is_err(),
                 "second init_logging call for level {:?} should panic (logger already set)",
