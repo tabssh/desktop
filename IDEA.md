@@ -16,6 +16,7 @@ official_site:
 maintainer_name:  casjay
 maintainer_email: casjay@yahoo.com
 android_sibling:  ../android
+web_sibling:      ../web
 license:          MIT
 repo:             https://github.com/tabssh/desktop
 
@@ -236,8 +237,8 @@ repo:             https://github.com/tabssh/desktop
   - Old v1 ZIP backups remain restorable
 - Cloud sync via filesystem watch and the user's existing sync app (Nextcloud, syncthing, rclone, etc.)
   - Wire format byte-compatible with Android sibling's `TABSSH_SYNC_V2`
-  - Header layout: `[0..32)` magic (`TABSSH_SYNC_V2` + zero padding) · `[32..64)` PBKDF2 salt · `[64..76)` GCM IV · `[76…]` ciphertext (GZIP-compressed JSON `SyncDataPackage`); GCM 128-bit auth tag appended by cipher
-  - KDF: PBKDF2-HMAC-SHA256, 100,000 iterations, 256-bit key
+  - Header layout: `[0..32)` magic (`TABSSH_SYNC_V2` + zero padding) · `[32..64)` Argon2id salt · `[64..76)` GCM IV · `[76…]` ciphertext (GZIP-compressed JSON `SyncDataPackage`); GCM 128-bit auth tag appended by cipher
+  - KDF: Argon2id (RFC 9106 v1.3), m=64MiB, t=3, p=1, 256-bit key
   - Three-way merge with conflict resolution UI for connections, stored_keys, themes, host_keys
   - Last-write-wins for workspaces, snippets, identities, connection_groups, cloud_accounts, macros, monitor_slots, vnc_hosts, vnc_identities, trusted_certificates, hypervisor_profiles, hypervisor_accounts
   - Per-entity sync toggles; 30s debounced sync-on-change
@@ -280,7 +281,7 @@ repo:             https://github.com/tabssh/desktop
   - Crates required: `qrcodegen`, `ciborium`, `argon2`, `aes-gcm`, `rand`, `base64`
 - Sync blobs must be interchangeable with the Android sibling (same TABSSH_SYNC_V2 format, same KDF)
 - Backup entity shapes must be deserializable by Android's `BackupImporter`
-- SQLite schema tracks Android sibling's Room schema (currently v37, migration chain v1→v37 in `../android/AI.md §8.4`); desktop schema versions are independent integers but must carry equivalent fields
+- SQLite schema tracks Android sibling's Room schema (currently v27, `../android/app/src/main/java/io/github/tabssh/storage/database/TabSSHDatabase.kt`); desktop schema versions are independent integers but must carry equivalent fields
 
 **Desktop-native features (no mobile equivalent)**
 - Read `~/.ssh/` directly — keys and config without an import step (Linux/BSD/macOS: `~/.ssh/`; Windows: `%USERPROFILE%\.ssh\`)
@@ -316,7 +317,7 @@ repo:             https://github.com/tabssh/desktop
 
 ### Must be compatible with
 
-- Android sibling TABSSH_SYNC_V2 wire format (AES-256-GCM + PBKDF2-HMAC-SHA256 100k iterations; header layout per `../android/AI.md §9.1`)
+- Android sibling TABSSH_SYNC_V2 wire format (AES-256-GCM + Argon2id m=64MiB t=3 p=1; header layout and KDF params authoritative in `../android/app/src/main/java/io/github/tabssh/sync/encryption/SyncEncryptor.kt`)
 - Android sibling QR pairing payload (CBOR + AES-256-GCM + Argon2id m=64MiB t=3 p=1 + base64 byte-mode QR; `PairingDecryptor.kt` is authoritative)
 - Android sibling backup format BACKUP_VERSION = 3, wire format v2 (`{"v":2,"items":[...]}` per entity file)
 - OpenSSH private key v1 format, PEM PKCS#1/PKCS#8, and standard OpenSSH public-key lines
