@@ -72,6 +72,17 @@
   is not yet implemented and the flag should print the same `include_str!`ed
   blob the GUI About screen shows.
 
+## CI failure (found post-push 2026-08-30, unrelated to the triggering commit)
+
+- **`vuln-scan` job fails on RUSTSEC-2026-0257 (`webbrowser` 1.2.1).**
+  `cargo audit` in CI run
+  https://github.com/tabssh/desktop/actions/runs/33314492262 (triggered by
+  commit `008fac749da4`, a docs-only `IDEA.md` fix — confirmed unrelated)
+  fails with exit code 1 on "Unix `BROWSER` handling allows browser argument
+  injection", disclosed 2026-07-29, fixed upstream in `webbrowser` >=1.2.2.
+  Bump the `webbrowser` dependency (direct or transitive — check
+  `Cargo.lock`) to >=1.2.2 and re-run `cargo audit` clean.
+
 ## Follow-up from bootstrap session
 
 - `make build`/`make test` fail in sandboxed environments because
