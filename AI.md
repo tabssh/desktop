@@ -855,6 +855,8 @@ The `assets/` directory in the repo holds source files (fonts, icons, default th
 | Cargo package name (`[package].name`) | lowercase, hyphenated | `notes-app` |
 | Rust crate identifier (used in `use`, `extern crate`) | lowercase, underscored — Cargo auto-converts hyphens | `notes_app` |
 
+**Operator-side install (the fourth exception).** `--service --install` (PART 23) and the packages and installers (PART 24) place the binary at the service path (`/usr/local/bin/{project_name}`) on the machine that will run it. That is the operator's action on their own system: AI sessions and development workflows never run it on the development machine, and the rules above stay in force there.
+
 ## Release Artifacts
 
 - Primary binary follows the naming schema `{project_name}-{platform}-{arch}{.ext}` defined in PART 2 → "Binary Model" — single statically linked file, `-musl`/vendor/ABI tokens stripped
@@ -2019,7 +2021,7 @@ jobs:
 
 ## Post-Push CI Verification
 
-`act --list` and a local `cargo test` pass only prove the workflow's syntax/job graph is valid and the code works in the local environment — they are not the real CI build. Every push (normal feature-branch push or an emergency direct push to the default branch) triggers a real CI run on the provider's infrastructure with real secrets, real matrix jobs, and the real `casjaysdev/rust:latest` toolchain image; any of those can fail even when every local check passed. Treating "local checks passed" as equivalent to "the build is green" is itself a bug.
+`act --list` and a local `cargo test` pass only prove the workflow's syntax/job graph is valid and the code works in the local environment — they are not the real CI build. Every push to `main` triggers a real CI run on the provider's infrastructure with real secrets, real matrix jobs, and the real `casjaysdev/rust:latest` toolchain image; any of those can fail even when every local check passed. Treating "local checks passed" as equivalent to "the build is green" is itself a bug.
 
 After every push, check the triggered run's status:
 - **GitHub**: `gh run list --branch {branch} --commit {sha} --limit 1` then `gh run watch {run-id}` (or `gh run view {run-id} --json status,conclusion`)
