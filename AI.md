@@ -1886,7 +1886,7 @@ In addition to the workflows, every repository ships:
 
 **GitHub Actions job ordering (`needs:`):**
 
-- `ci.yml`: `lint` and `test` run in parallel → `build` needs: test → `upload-artifacts` needs: build; security jobs (`secret-scan`, `workflow-policy`, `vuln-scan`, `image-scan`) run in parallel with each other
+- `ci.yml`: `lint` and `test` run in parallel → `build` needs: lint and test; coverage collection and the 60% enforcement are steps of the `test` job, never a separate job; security jobs (`secret-scan`, `workflow-policy`, `vuln-scan`, `image-scan`) run in parallel with each other
 - `release.yml`: `build` → `release` (needs: build); release job always re-runs its own build inline
 - Cross-workflow ordering via branch protection; never `workflow_run`
 
