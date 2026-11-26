@@ -259,6 +259,7 @@ The single binary contains **everything the app needs to function**. The user is
 | **TODO.md** | Task tracking (human-owned) | AI may mark done; never delete/empty |
 | **PLAN.AI.md** | Implementation plan (AI-owned) | Planning new work |
 | **PLAN.md** | Implementation plan (human-owned) | AI may mark done; never rewrite wholesale |
+| **PROMPT.md** | Prompt/instructions (human-owned) | AI reads and follows it; never rewrite or delete |
 | **README.md** | User-facing install/usage docs | Usage changes |
 | **LICENSE.md** | Project + dependency licenses | Dependency set changes |
 | **release.txt** | Optional local-build version (Makefile only; empty or missing = devel rule) | Local-build version changes |
@@ -2341,6 +2342,7 @@ Never use a GitHub Actions badge for a GitLab or Gitea project — the CI badge 
 | **Per-record provenance** | When records come from several sources, every record or file carries a `source` key that names its entry in the third-party notices |
 | **Unknown or unusable terms** | Content with no stated license, a license that forbids redistribution, a site that forbids scraping, or an unknown origin is NOT embedded. The project asks the user instead of guessing |
 | **Generated content** | It counts as the project's own only when the user says so, and is never presented with an invented source |
+| **Project translations** | Strings translated for the project under the localization rule (by the AI or a human translator, I18N & A11Y → "Translating") are the project's own work and need no source record; a human translator's pull request is under the project license. A translation copied from another project, a service or a third-party catalogue is third-party content and follows every row above |
 
 ## License Compliance
 
