@@ -969,7 +969,7 @@ PROJECT_NAME="{project_name}"
 PROJECT_IMAGE="casjaysdev/rust:latest"
 
 docker run --rm \
-  --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
+  --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" \
   ...
 ```
 
@@ -978,7 +978,7 @@ docker run --rm \
 - `--rm` — self-remove on exit (no orphaned containers)
 - `--no-healthcheck` — on toolchain and one-shot runs, so the image's service `HEALTHCHECK` never polls them
 - `-it` — ONLY for an interactive run with a real TTY (log streaming, signal handling); batch, script and CI runs never use it, because `docker run -it` fails without a TTY
-- `--name "${PROJECT_NAME}-XXXX"` — traceable name; `XXXX` is the 8-char lowercase-alphanumeric random suffix produced by `tr -dc 'a-z0-9' </dev/urandom | head -c8` (Makefile form: `$$(tr -dc 'a-z0-9' </dev/urandom | head -c8)`)
+- `--name "${PROJECT_NAME}-XXXX"` — traceable name; `XXXX` is the 8-char lowercase-alphanumeric random suffix produced by `head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8` (Makefile form: `$$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)`)
 
 There is no opt-out. Unnamed or persistent build/test containers are a spec violation.
 
@@ -1052,7 +1052,7 @@ GUI and display-aware test runs use the `gui` compose service (or equivalent `do
 xhost +SI:localuser:$(id -un)
 
 docker run --rm \
-  --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
+  --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" \
   -e DISPLAY="$DISPLAY" \
   -e XAUTHORITY=/tmp/.docker.xauth \
   -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
@@ -1069,7 +1069,7 @@ xhost -SI:localuser:$(id -un)
 
 ```bash
 docker run --rm \
-  --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
+  --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" \
   -e WAYLAND_DISPLAY="$WAYLAND_DISPLAY" \
   -e XDG_RUNTIME_DIR=/tmp/xdg \
   -v "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY":"/tmp/xdg/$WAYLAND_DISPLAY" \
@@ -1174,7 +1174,7 @@ DOCKER_TIMEOUT ?= 3600
 
 # COMMIT_ID and BUILD_EPOCH are exported into the build environment so build.rs embeds them
 CARGO_DOCKER := timeout -k 30 $(DOCKER_TIMEOUT) docker run --rm --no-healthcheck \
-	--name $(PROJECTNAME)-$$(tr -dc 'a-z0-9' </dev/urandom | head -c8) \
+	--name $(PROJECTNAME)-$$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8) \
 	--memory=$(DOCKER_MEM) --cpus=$(DOCKER_CPUS) --cpu-shares=$(DOCKER_CPU_SHARES) \
 	-v $(PWD):/app \
 	-v $(CARGO_CACHE):/usr/local/cargo/registry \
@@ -1236,7 +1236,7 @@ docker:
 
 dev: build
 	docker run --rm -it \
-		--name $(PROJECTNAME)-dev-$$(tr -dc 'a-z0-9' </dev/urandom | head -c8) \
+		--name $(PROJECTNAME)-dev-$$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8) \
 		-v $(PWD):/app -w /app \
 		casjaysdev/rust:latest \
 		$(BINDIR)/$(PROJECTNAME)
@@ -1645,7 +1645,7 @@ All gates execute inside the project Docker container (PART 5 → "Docker Rule")
 # Example (Docker-wrapped) — fails if total coverage < threshold
 THRESHOLD="${COVERAGE_MIN:-60}"
 docker run --rm \
-  --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
+  --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" \
   -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
   cargo tarpaulin --workspace --all-features --fail-under "$THRESHOLD"
 ```
@@ -1970,7 +1970,7 @@ jobs:
         run: |
           IMAGE="casjaysdev/rust:latest"
           docker run --rm -i \
-            --name "$(basename "$GITHUB_REPOSITORY")-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
+            --name "$(basename "$GITHUB_REPOSITORY")-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" \
             -v "$PWD":/work -w /work "$IMAGE" cargo audit
 
   image-scan:
@@ -2068,19 +2068,19 @@ mkdir -p binaries
 BUILD_EPOCH="$(date -u +%s)"
 
 # Run gates inside the image (casjaysdev/rust:latest — all tools pre-installed)
-docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo fmt --check
-docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo clippy -- -D warnings
-docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo test --workspace --all-features
-docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo doc --workspace --no-deps
+docker run --rm --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo fmt --check
+docker run --rm --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo clippy -- -D warnings
+docker run --rm --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo test --workspace --all-features
+docker run --rm --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" cargo doc --workspace --no-deps
 
 # License + advisory enforcement (PART 11 → "License Compliance")
-docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
+docker run --rm --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
   cargo deny check licenses advisories bans sources
 
 # Attribution-drift check: regenerate the GENERATED region and compare to committed.
 # The `>` redirection runs on the host shell, capturing the container's stdout
 # into a host-side file (the cwd is bind-mounted at /work, so this is intentional).
-docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
+docker run --rm --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
   cargo about generate about.hbs > LICENSE.generated.md
 sed -n '/<!-- GENERATED:/,$p' LICENSE.md > LICENSE.committed-generated.md
 diff LICENSE.committed-generated.md LICENSE.generated.md
@@ -2094,7 +2094,7 @@ for TARGET in x86_64-unknown-linux-musl aarch64-unknown-linux-musl \
               x86_64-pc-windows-gnu aarch64-pc-windows-gnullvm \
               x86_64-apple-darwin aarch64-apple-darwin; do
   docker run --rm \
-    --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" \
+    --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" \
     -e VERSION="$VERSION" \
     -e BUILD_EPOCH="$BUILD_EPOCH" \
     -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
@@ -2124,15 +2124,15 @@ for TARGET in x86_64-unknown-linux-musl aarch64-unknown-linux-musl \
   #   Windows GNU    → dumpbin /dependents (expect no MinGW runtime DLLs; image has no MSVC toolchain)
   case "$TARGET" in
     *-unknown-linux-musl)
-      docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
+      docker run --rm --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
         sh -c "ldd target/$TARGET/release/{project_name} 2>&1 | grep -qE 'not a dynamic executable|statically linked'"
       ;;
     *-apple-darwin)
-      docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
+      docker run --rm --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
         sh -c "otool -L target/$TARGET/release/{project_name}"
       ;;
     *-pc-windows-*)
-      docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
+      docker run --rm --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
         sh -c "dumpbin /dependents target/$TARGET/release/{project_name}.exe"
       ;;
   esac
@@ -2141,7 +2141,7 @@ done
 # Generate the SBOM (CycloneDX) — published alongside the release artifacts.
 # `cargo cyclonedx --format json` writes `bom.json` next to Cargo.toml; rename
 # into binaries/ for inclusion in the release.
-docker run --rm --name "${PROJECT_NAME}-$(tr -dc 'a-z0-9' </dev/urandom | head -c8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
+docker run --rm --name "${PROJECT_NAME}-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" -v "$PWD":/work -w /work "$PROJECT_IMAGE" \
   cargo cyclonedx --format json
 cp bom.json "binaries/{project_name}-bom.json"
 
