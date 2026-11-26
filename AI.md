@@ -2324,6 +2324,20 @@ Never use a GitHub Actions badge for a GitLab or Gitea project — the CI badge 
 
 **Rule:** `LICENSE.md` is generated, not hand-written, for the third-party section (see "License Compliance" below). The project license text and upstream NOTICE preservation pieces are hand-written and MUST be merged with the generated section, not overwritten by it.
 
+## Embedded Datasets and Content (Provenance Before Embedding)
+
+**Any third-party dataset or content a project embeds or ships (word lists, quote or joke collections, place and postal data, images, fonts, icons, translations, GeoIP-style databases) needs documented provenance BEFORE it is embedded.**
+
+| Required | Rule |
+|----------|------|
+| **Source** | The exact origin: URL or publisher, version, and retrieval date |
+| **Terms** | The license or terms of use. They MUST allow redistribution inside a project released under the project's license, checked against the project license and its dependencies' licenses |
+| **Attribution** | The notice the terms require (author, license, link, changes made) |
+| **Record** | In the project's third-party notices (`LICENSE.md`, "Third-Party Licenses") and on the attribution surface (`/server/about`, or the README when the project has no web page) |
+| **Per-record provenance** | When records come from several sources, every record or file carries a `source` key that names its entry in the third-party notices |
+| **Unknown or unusable terms** | Content with no stated license, a license that forbids redistribution, a site that forbids scraping, or an unknown origin is NOT embedded. The project asks the user instead of guessing |
+| **Generated content** | It counts as the project's own only when the user says so, and is never presented with an invented source |
+
 ## License Compliance
 
 License compliance is enforced by tooling and gated in CI; it is not left to manual review.
