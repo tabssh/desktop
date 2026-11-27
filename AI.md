@@ -2274,7 +2274,7 @@ Never use a GitHub Actions badge for a GitLab or Gitea project — the CI badge 
 [![Build](https://jenkins.example.com/buildStatus/icon?job={project_org}/{project_name})](https://jenkins.example.com/job/{project_org}/job/{project_name}/)
 ```
 
-**Release/License/Docs badges also adapt to platform:**
+**Release/License/Docs badges also adapt to platform (the Docs row is included only when the documentation is deployed, see the docs-badge rule below; otherwise omit it):**
 
 ```markdown
 # GitHub
