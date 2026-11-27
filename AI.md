@@ -1194,12 +1194,13 @@ TARGETS          ?= x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-
 DOCKER_PLATFORMS ?= linux/amd64,linux/arm64
 REGISTRY         ?= ghcr.io/$(PROJECTORG)/$(PROJECTNAME)
 
-.PHONY: build release docker test dev clean
+.DEFAULT_GOAL := help
+.PHONY: build release docker test clean help
 
 build:
 	@mkdir -p $(BINDIR)
-	$(CARGO_DOCKER) cargo build --release --target $(TARGET)
-	@cp target/$(TARGET)/release/$(PROJECTNAME) $(BINDIR)/$(PROJECTNAME)
+	$(CARGO_DOCKER) cargo build --target $(TARGET)
+	@cp target/$(TARGET)/debug/$(PROJECTNAME) $(BINDIR)/$(PROJECTNAME)
 
 test:
 	@$(CARGO_DOCKER) sh -c " \
@@ -1209,8 +1210,10 @@ test:
 			--output-dir \$$COVDIR --fail-under 60 && \
 		echo \"Tests complete - Coverage >= 60% required ✓\""
 
+# Builds only: it never tags, pushes or publishes (CI/CD does); production build: the release profile, version embedded
 release:
-	@mkdir -p $(BINDIR) $(RELDIR)
+	@mkdir -p $(RELDIR)
+	@rm -rf $(RELDIR)/*
 	@for target in $(TARGETS); do \
 		echo "Building $$target..."; \
 		$(CARGO_DOCKER) cargo build --release --target $$target || exit 1; \
@@ -1223,9 +1226,8 @@ release:
 			aarch64-apple-darwin)       OUT=$(PROJECTNAME)-darwin-arm64 ;; \
 		esac; \
 		BIN=$(PROJECTNAME); case $$target in *windows*) BIN=$(PROJECTNAME).exe ;; esac; \
-		cp target/$$target/release/$$BIN $(BINDIR)/$$OUT; \
+		cp target/$$target/release/$$BIN $(RELDIR)/$$OUT; \
 	done
-	@cp $(BINDIR)/$(PROJECTNAME)-* $(RELDIR)/
 	@echo "$(VERSION)" > $(RELDIR)/version.txt
 	@cd $(RELDIR) && FILES="$$(ls)" && sha256sum $$FILES > sha256.txt && sha512sum $$FILES > sha512.txt
 
@@ -1239,15 +1241,17 @@ docker:
 		-t $(REGISTRY):$(VERSION) -t $(REGISTRY):latest \
 		-f docker/Dockerfile .
 
-dev: build
-	docker run --rm -it \
-		--name $(PROJECTNAME)-dev-$$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8) \
-		-v $(PWD):/app -w /app \
-		casjaysdev/rust:latest \
-		$(BINDIR)/$(PROJECTNAME)
-
 clean:
 	rm -rf $(BINDIR) $(RELDIR)
+
+help:
+	@echo "Targets:"
+	@echo "  build    Debug binary to $(BINDIR)/"
+	@echo "  test     Unit tests with coverage"
+	@echo "  release  Production binaries for all platforms and checksums to $(RELDIR)/"
+	@echo "  docker   Container image (no push)"
+	@echo "  clean    Remove $(BINDIR)/ and $(RELDIR)/"
+	@echo "  help     This list"
 ```
 
 `BUILD_DATE` is never independently captured — it exists only where a Docker build needs the `org.opencontainers.image.created` label (`--build-arg BUILD_DATE=`), derived as `BUILD_DATE="$(date -u -d "@${BUILD_EPOCH}" +%Y-%m-%dT%H:%M:%SZ)"`. The app itself never receives `BUILD_DATE`; it derives the date from the embedded epoch via `build_date()` below.
